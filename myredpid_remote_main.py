@@ -21,10 +21,14 @@ if not os.path.exists(plots_path):
 	
 title_font = {'fontname':'Arial', 'size':'12', 'color':'black', 'weight':'normal',
 'verticalalignment':'bottom'} # Bottom vertical alignment for more space
-axis_font = {'fontname':'Times New Roman', 'size':'11'}
-ticks_font = {'fontname':'Times New Roman', 'size':'11'}
-label_font = {'family':'Times New Roman','size':'11'}
-legend_font = {'family':'Times New Roman','size':'8'}
+#axis_font = {'fontname':'Times New Roman', 'size':'11'}
+#ticks_font = {'fontname':'Times New Roman', 'size':'11'}
+#label_font = {'family':'Times New Roman','size':'11'}
+#legend_font = {'family':'Times New Roman','size':'8'}
+axis_font = {'size':'11'}
+ticks_font = {'size':'11'}
+label_font = {'size':'11'}
+legend_font = {'size':'8'}
 
 
 fig1 = plt.figure(2,figsize=(8.5/2.53, 5./2.53))
@@ -64,6 +68,7 @@ buff = list(map(float, buff_string))
 
 ##########PLOT RESULTS			
 filename = 'oszi_trace'	
+ax1.set_title(filename)
 ax1.plot(buff,'k',markersize=5,linewidth = 1)
 #ax1.set_xlim([0.,100.])
 #ax1.set_ylim([0.7,1.05])
