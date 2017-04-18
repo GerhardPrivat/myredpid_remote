@@ -60,11 +60,13 @@ rp_s = scpi.scpi("10.64.11.12")
 #1,125 MS/s,131.072 us,from - 8192 to x,-6.554E-5 to x
 #8,15.6 MS/s,1.049 ms,from - 8192 to x,-5.243E-4 to x
 #64,1.9 MS/s,8.389 ms,from - 8192 to x,-4.194E-3 to x
-#1024,122.0 MS/s,134.218 ms,from - 8192 to x,-6.711E-2 to x
-#8192,15.2 kS/s,1.074 s,from - 8192 to x,-5.369E-1 to x
+#1024=10**10,122.0 MS/s,134.218 ms,from - 8192 to x,-6.711E-2 to x
+#8192=10**13,15.2 kS/s,1.074 s,from - 8192 to x,-5.369E-1 to x
 #65536,7.6 kS/s,8.590 s,from - 8192 to x,-4.295E+0 to x
 
-decimation = int(2**10)
+#decimation = int(2**10) # max around 134 ms
+#decimation = int(2**7) # max around 16 ms -> strange modes
+decimation = int(2**6) # max around 8.389 ms
 
 print 'start recording'
 print 'decimation is', decimation
@@ -76,28 +78,21 @@ print 'sample_rate_MHz', sample_rate_MHz, ' sampling distance_ms', delta_time_ms
 #START RECORDING
 rp_s.tx_txt('ACQ:RST')
 rp_s.tx_txt('ACQ:DEC '+str(decimation))
-rp_s.tx_txt('ACQ:TRIG:LEV 0.5')
+rp_s.tx_txt('ACQ:TRIG:LEV 1')
 
 
 for ite_meas in range(10):
 	start_time_ms = tm.time()
+	rp_s.tx_txt('ACQ:TRIG:DLY ' + str(int(2**13-1000.)))
 	rp_s.tx_txt('ACQ:START')
-#	rp_s.tx_txt('ACQ:TRIG NOW')
-#	rp_s.tx_txt('ACQ:TRIG EXT_PE')
-	rp_s.tx_txt('SOUR1:TRIG:SOUR EXT')	
+#	tm.sleep(1.)	#pause to refresh buffer
+	rp_s.tx_txt('ACQ:TRIG EXT_PE')
 
-#	while 1
-#		trig_rsp=rp_s.('ACQ:TRIG:STAT?')
-#   
-#	if strcmp('TD',trig_rsp(1:2))  % Read only TD
-#   
-#		break
-   
-
+	
 	while 1:
 	    rp_s.tx_txt('ACQ:TRIG:STAT?')
 	    rcv = 	rp_s.rx_txt() 
-	    print rcv
+#	    print rcv
 	    if rcv == 'TD':
 	        break
 	
@@ -111,6 +106,9 @@ for ite_meas in range(10):
 	buff = buff- np.average(buff)
 	time_ms = np.arange(0,len(buff)*delta_time_ms_ms,delta_time_ms_ms)
 	
+	print '\nrecording time is', time_ms[-1], ' ms'
+	print 'Nr of points is', len(buff)
+#	print 'meas time', time_ms[-1]
 	#GET TIME
 	stop_time_ms = tm.time()
 	
@@ -125,7 +123,7 @@ for ite_meas in range(10):
 	filename = 'oszi_trace'	
 	ax1.set_title('meas. at ' + str(rel_start_time) + ' ms',**title_font)
 	ax1.plot(time_ms,buff,'k',markersize=5,linewidth = 1)
-	#ax1.set_xlim([0.,100.])
+#	ax1.set_xlim([0.,40.])
 	#ax1.set_ylim([0.7,1.05])
 	
 	#############LABELS AND LEGENDS########################
