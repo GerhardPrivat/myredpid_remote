@@ -11,9 +11,10 @@ Created on Thu Apr 06 10:37:27 2017
 import matplotlib.pyplot as plt
 import sys, os
 import numpy as np
+import pdb
 import redpitaya_scpi as scpi
 import time as tm
-
+from matplotlib.pyplot import cm 
 
 #############PRE SETTINGS
 ini_time_ms = tm.time()
@@ -23,6 +24,7 @@ plots_path = pathname + '\\plots'
 if not os.path.exists(plots_path):
 	os.makedirs(plots_path)
 	
+#INITIALIZE PLOT
 title_font = {'fontname':'Arial', 'size':'12', 'color':'black', 'weight':'normal',
 'verticalalignment':'bottom'} # Bottom vertical alignment for more space
 #axis_font = {'fontname':'Times New Roman', 'size':'11'}
@@ -35,19 +37,38 @@ ticks_font = {'size':'11'}
 label_font = {'size':'11'}
 legend_font = {'size':'8'}
 
-
-fig1 = plt.figure(2,figsize=(8.5/2.53, 5./2.53))
-ax1 = fig1.add_subplot(111)
+fig1 = plt.figure(1,tight_layout=True,figsize=(22.5/2.53, 10./2.53))
+ax1 = fig1.add_subplot(211)
+ax2 = fig1.add_subplot(212)
 fig1.subplots_adjust(left=0.25)
 fig1.subplots_adjust(bottom=0.25)
 fig1.subplots_adjust(top=0.90)
 fig1.subplots_adjust(right=0.95)
+plt.cla()
+
+for axis in ['top','bottom','left','right']:
+	ax1.spines[axis].set_linewidth(1.)
+	ax2.spines[axis].set_linewidth(1.)
+
+plt_title = ax1.set_title(' ')
+
+color=iter(cm.rainbow(np.linspace(0,1,10)))
+
+ax1_tace1, = ax1.plot([],[])
+ax2_tace2, = ax2.plot([],[])
+
+ax1.set_ylabel('Amplitude (V)',**axis_font)
+ax2.set_ylabel('Amplitude (V)',**axis_font)
+ax2.set_xlabel('Time (ms)',**axis_font)
+
+ax1.grid()
+ax2.grid()
 
 ###########REMOTE CONNECTION
 rp_s = scpi.scpi("10.64.11.12")
 
 
-###########DATA ACQUISION
+###DATA ACQUISION
 #acquire voltage from different pins
 #len_data = 4
 #amp_V = np.zeros([10,1])
@@ -75,13 +96,13 @@ sample_rate_MHz = 125. / decimation
 delta_time_ms_ms = 1. / sample_rate_MHz * 10**(-3) 
 print 'sample_rate_MHz', sample_rate_MHz, ' sampling distance_ms', delta_time_ms_ms
 
-#START RECORDING
+###START RECORDING
 rp_s.tx_txt('ACQ:RST')
 rp_s.tx_txt('ACQ:DEC '+str(decimation))
 rp_s.tx_txt('ACQ:TRIG:LEV 1')
 
 
-for ite_meas in range(10):
+for ite_meas in range(5):
 	start_time_ms = tm.time()
 	rp_s.tx_txt('ACQ:TRIG:DLY ' + str(int(2**13-1000.)))
 	rp_s.tx_txt('ACQ:START')
@@ -95,71 +116,76 @@ for ite_meas in range(10):
 #	    print rcv
 	    if rcv == 'TD':
 	        break
-	
+								
+	###READ TACE 1
 	rp_s.tx_txt('ACQ:SOUR1:DATA?')
 	buff_string = rp_s.rx_txt()
 	buff_string = buff_string.strip('{}\n\r').replace("  ", "").split(',')
 	buff = list(map(float, buff_string))
+	y_trace1_V = np.asarray(buff)
+
+	###READ TACE 2
+	rp_s.tx_txt('ACQ:SOUR2:DATA?')
+	buff_string = rp_s.rx_txt()
+	buff_string = buff_string.strip('{}\n\r').replace("  ", "").split(',')
+	buff = list(map(float, buff_string))
+	y_trace2_V = np.asarray(buff)
 	
+#	print y_trace1_V
+#	pdb.set_trace()
 	#evalutae data
-	buff = np.asarray(buff)
-	buff = buff- np.average(buff)
-	time_ms = np.arange(0,len(buff)*delta_time_ms_ms,delta_time_ms_ms)
 	
-	print '\nrecording time is', time_ms[-1], ' ms'
-	print 'Nr of points is', len(buff)
-#	print 'meas time', time_ms[-1]
-	#GET TIME
+	###PROCESS DATA
+	y_trace1_V = y_trace1_V- np.average(y_trace1_V)
+	y_trace2_V = y_trace2_V- np.average(y_trace2_V)
+	
+	time_ms = np.arange(0,len(y_trace1_V)*delta_time_ms_ms,delta_time_ms_ms)
+
 	stop_time_ms = tm.time()
 	
 	rel_start_time = int(1000.*(start_time_ms - ini_time_ms))
 	run_time_ms = int(1000.*(stop_time_ms - start_time_ms))
 	
-	print 'relative start time', rel_start_time, ' ms'
+	print '\nNew trace:'
+	print 'Relative start time', rel_start_time, ' ms'
 	print 'run time', run_time_ms, ' ms'
+		
+	###PLOT TRACES	
+	plt.ion()		
+	c=next(color)
 	
-	##########PLOT RESULTS	
-	plt.cla()		
-	filename = 'oszi_trace'	
-	ax1.set_title('meas. at ' + str(rel_start_time) + ' ms',**title_font)
-	ax1.plot(time_ms,buff,'k',markersize=5,linewidth = 1)
-#	ax1.set_xlim([0.,40.])
-	#ax1.set_ylim([0.7,1.05])
+	plt_title = ax1.set_title('measured after ' + str(rel_start_time) + ' ms',**title_font)
 	
-	#############LABELS AND LEGENDS########################
-	#ax1.grid()
+	ax1_tace1.remove()
+	ax1_tace1, = ax1.plot(time_ms,y_trace1_V,markersize=5,linewidth = 1,color=c)
+	ax1.set_xlim([0.,max(time_ms)])
+
+	ax2_tace2.remove()
+	ax2_tace2, = ax2.plot(time_ms,y_trace2_V,markersize=5,linewidth = 1,color=c)
+	ax2.set_xlim([0.,max(time_ms)])
 	
-	for axis in ['top','bottom','left','right']:
-		ax1.spines[axis].set_linewidth(1.)
-	
-	#ticks:
-	ax1.locator_params(axis = 'x', nbins = 6)
-	ax1.locator_params(axis = 'y', nbins = 4)
-	
-	ax1.set_xlabel('Time (ms)',**axis_font)
-	ax1.set_ylabel('Amplitude (V)',**axis_font)
-	ax1.grid()
-	
-	locs,labels = plt.yticks()
-	#leg_handle = plt.legend(['spectrum'],loc='lower right',prop=legend_font)
-	
-	fig1.canvas.draw()
-	
-	xlabels = [item.get_text() for item in ax1.get_xticklabels()]
-	ax1.set_xticklabels(xlabels,**ticks_font)
-	ylabels = [item.get_text() for item in ax1.get_yticklabels()]
-	ax1.set_yticklabels(ylabels,**ticks_font)
+	plt.draw()
 	
 	#SAVE DATA
-	#save data
-#	savename_data = 'test_at_'+str(int((start_time_ms-ini_time_ms)*1000.)) + '_ms' ite_meas
 	savename = str(ite_meas) + '_test'
-	np.array(buff).dump(open(data_path+'\\'+savename+'.npy', 'wb'))
+	np.array(y_trace1_V).dump(open(data_path+'\\'+savename+'.npy', 'wb'))
 	#myArray = np.load(open('array.npy', 'rb'))
-	
-	#save plots
-#	fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
-	fig1.savefig(plots_path + '//' + savename + '.png', dpi=300, transparent=True)
 
+###LABELS AND LEGENDS
+
+#TICKS
+ax1.locator_params(axis = 'x', nbins = 6)
+ax1.locator_params(axis = 'y', nbins = 4)
+	
+###SAVE PLOTS
+filename = 'oszi_trace'
+fig1.canvas.draw()
+xlabels = [item.get_text() for item in ax1.get_xticklabels()]
+ax1.set_xticklabels(xlabels,**ticks_font)
+ylabels = [item.get_text() for item in ax1.get_yticklabels()]
+ax1.set_yticklabels(ylabels,**ticks_font)
+
+#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
+fig1.savefig(plots_path + '//' + savename + '.png', dpi=300, transparent=True)
 
 print 'Farewell, master!'
