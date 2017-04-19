@@ -1,6 +1,6 @@
 #!/usr/bin/env mpython_q
 import numpy as np
-import sys
+import sys, os
 from numpy import NaN, Inf, arange, isscalar, array, asarray
 import ntpath
 
@@ -318,9 +318,54 @@ def read_agilent_DSOx2024a(expdatfolder,expfilenr=0,expfiletype='csv',grdsubtrac
 #    return xfreq_GHz, yfreq, expfilename
                 
 def autocorr(x):
+    "calculates the crosscorrelation function for multiple purposes"
 #    result = np.convolve(x, x, mode='same')
     result = np.convolve(x, np.flipud(x), mode='full')
     return result[result.size/2.:]
-    return result
-                
-                
+#    return result
+         
+def get_error_correlation(trace_1,trace_2,setpoint_xcorr):
+    "Takes TE and TM traces and gives an output "
+    current_corr = autocorr(trace_1,trace_2)
+    error_corr = autocorr(current_corr,setpoint_xcorr)
+    ind_max = np.argmax(error_corr)
+    return ind_max
+
+def get_error_max(trace_1,ind_set):
+    "Takes maximum of trace and calculates error max"
+    ind_error_max = np.argmax(trace_1) - ind_set
+    return ind_error_max
+				
+def read_user_input(newstdin,flag,pid_status,P_pid,I_pid):
+    
+    newstdinfile = os.fdopen(os.dup(newstdin))
+    
+    while True:
+        print("Change PID or end PID with \"exit\": "),
+        stind_checkout = newstdinfile.readline()
+        stind_checkout = stind_checkout[:len(stind_checkout)-1]
+								
+        if (stind_checkout == "on"):
+	        print 'Start the lock'									
+	        print stind_checkout 
+	        pid_status.value = 1   
+
+        if (stind_checkout == "off"):
+	        print 'Stop the lock'							
+	        print stind_checkout 
+	        pid_status.value = 0   
+									
+        if (stind_checkout[0] == "P"):
+	        print stind_checkout[1:] 
+	        P_pid.value = int(stind_checkout[1:])    
+ 
+        if (stind_checkout[0] == "I"):
+	        print stind_checkout[1:] 
+	        I_pid.value = int(stind_checkout[1:])    
+  											
+        if (stind_checkout == "exit"):
+	        flag.value = 1
+	        newstdinfile.close()
+	        break
+        else:
+	        continue
