@@ -319,8 +319,8 @@ def read_agilent_DSOx2024a(expdatfolder,expfilenr=0,expfiletype='csv',grdsubtrac
                 
 def autocorr(x):
 #    result = np.convolve(x, x, mode='same')
-    result = np.convolve(x, x, mode='full')
+    result = np.convolve(x, np.flipud(x), mode='full')
     return result[result.size/2.:]
-#    return result
+    return result
                 
                 
