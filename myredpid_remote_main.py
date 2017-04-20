@@ -10,6 +10,8 @@ Created on Thu Apr 06 10:37:27 2017
 """
 import sys, os
 #os._exit(00)
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pdb
@@ -38,10 +40,12 @@ if __name__ == '__main__':
 	
 	###FOLDER SETTINGS
 	pathname = os.getcwd()
-	data_path = pathname + '\\data'
-	plots_path = pathname + '\\plots'
-	if not os.path.exists(plots_path):
-		os.makedirs(plots_path)
+	print(os.walk(pathname))
+	dir_list = [x[0] for x in os.walk(pathname)]
+	for dir_name in dir_list:
+		if not(dir_name.find("plots")) == -1:
+			plots_path = dir_name + dir_name[-6]
+	data_path = plots_path[:-7] + plots_path[-1] +  'data' + plots_path[-1] 
 		
 	###PLOT SETTINGES
 	title_font = {'fontname':'Arial', 'size':'12', 'color':'black', 'weight':'normal',
@@ -53,7 +57,7 @@ if __name__ == '__main__':
 	label_font = {'size':'11'}
 	legend_font = {'size':'8'}
 	
-	plt.clf()
+	#plt.clf()
 	fig1 = plt.figure(1,tight_layout=True,figsize=(22.5/2.53, 10./2.53))
 	
 	ax1 = fig1.add_subplot(311)
@@ -111,8 +115,8 @@ if __name__ == '__main__':
 	
 	ini_time_ms = tm.time()
 	ite_meas = 1
-#	for ite_meas in range(num_run):
-	while flag.value == 0:
+	for ite_meas in range(num_run):
+#	while flag.value == 0:
 #		if flag == 1:
 #			break
 		ite_meas =  1
@@ -180,9 +184,9 @@ if __name__ == '__main__':
 		stop_time_ms = tm.time()
 		rel_start_time = int(1000.*(start_time_ms - ini_time_ms))
 		run_time_ms = int(1000.*(stop_time_ms - start_time_ms))
-#		print '\nNew trace:'
-#		print 'Relative start time', rel_start_time, ' ms'
-#		print 'run time', run_time_ms, ' ms'
+		print('\nNew trace:')
+		print('Relative start time', rel_start_time, ' ms')
+		print('run time', run_time_ms, ' ms')
 		
 		###PLOT TRACES		
 		if 1==1:
@@ -215,7 +219,7 @@ if __name__ == '__main__':
 		newstdin = sys.stdin.fileno()
 		reading_process = multiprocessing.Process(target=read_user_input, args=(newstdin,flag,pid_status,P_pid,I_pid))
 		reading_process.start()
-		print 'flag, pid_status, P, I ', flag.value, pid_status.value, P_pid.value, I_pid.value
+		print('flag, pid_status, P, I ', flag.value, pid_status.value, P_pid.value, I_pid.value)
 #		newstdin = sys.stdin.fileno()
 #		read_user_input(newstdin)
 	
@@ -239,7 +243,7 @@ if __name__ == '__main__':
 		if pid_output_percent > 100.:
 			pid_output_percent = 100.
 		
-		print 'pid_output_percent', pid_output_percent
+		print('pid_output_percent', pid_output_percent)
 		
 		pid_output_V = str((1.8/100)*pid_output_percent)     #from 0 - 1.8 volts
 		pin_out_num = '2'  #Analog outputs 0,1,2,3
@@ -247,8 +251,8 @@ if __name__ == '__main__':
 		scpi_command = 'ANALOG:PIN AOUT' + pin_out_num + ',' + pid_output_V
 		rp_s.tx_txt(scpi_command)
 	
-	av_time = int(1000.*(stop_time_ms-ini_time_ms ) / num_run)
-	print 'averaged run time is ', av_time, ' ms'
+	av_time = (1000.*(stop_time_ms-ini_time_ms ) / num_run)
+	print('averaged run time is ', av_time, ' ms')
 	###LABELS AND LEGENDS
 	
 	#TICKS
@@ -267,5 +271,6 @@ if __name__ == '__main__':
 	fig1.savefig(plots_path + '//' + savename + '.png', dpi=300, transparent=True)
 	
 	plt.close()
-	print 'Farewell, master!'
+	print('Farewell, master!')
+	sys.exit()
 	
