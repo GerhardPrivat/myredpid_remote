@@ -41,8 +41,8 @@ if __name__ == '__main__':
 	###PROGRAMM SETTINGS
 	do_plot = 1 #only plots of =1
 	do_corr = 1 #only correlates of = 1, plot must be on
- 	do_output = 1 #only gives an outpu for = 1
-   
+	do_output = 1 #only gives an outpu for = 1
+
 	###FOLDER SETTINGS
 	pathname = os.getcwd()
 	print(os.walk(pathname))
@@ -240,7 +240,7 @@ if __name__ == '__main__':
 			pid_output = P_pid_curr + I_pid_curr
 			
 		###DEFINE OUTPUT
-	   	#rp_s.tx_txt('CR/LF'); #no idea what this one does
+		#rp_s.tx_txt('CR/LF'); #no idea what this one does
 		if do_output == 1:
 			pid_output_percent = pid_output + pid_offset
 			
