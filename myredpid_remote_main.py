@@ -40,7 +40,9 @@ if __name__ == '__main__':
 
 	###PROGRAMM SETTINGS
 	do_plot = 1 #only plots of =1
-    
+	do_corr = 1 #only correlates of = 1, plot must be on
+ 	do_output = 1 #only gives an outpu for = 1
+   
 	###FOLDER SETTINGS
 	pathname = os.getcwd()
 	print(os.walk(pathname))
@@ -126,7 +128,7 @@ if __name__ == '__main__':
 		start_time_ms = tm.time()
 		rp_s.tx_txt('ACQ:TRIG:DLY ' + str(int(buff_len-1000.)))
 		rp_s.tx_txt('ACQ:START')
-		tm.sleep(1.)	#pause to refresh buffer
+#		tm.sleep(1.)	#pause to refresh buffer
 		rp_s.tx_txt('ACQ:TRIG EXT_PE')
 	
 		
@@ -178,10 +180,10 @@ if __name__ == '__main__':
 		y_trace2_V = smooth(y_trace2_V,3)
 		y_trace2_V = y_trace2_V- np.average(y_trace2_V)
 	
-		y_correllation = autocorr(y_trace1_V)
-		time_correllation_ms = range(len(y_correllation))
-		time_correllation_ms = np.asarray(time_correllation_ms) * delta_time_ms_ms
-#		print 'lengths: ', len(y_trace1_V), len(y_correllation)
+		if do_corr == 1:
+			y_correllation = autocorr(y_trace1_V)
+			time_correllation_ms = range(len(y_correllation))
+			time_correllation_ms = np.asarray(time_correllation_ms) * delta_time_ms_ms
 	
 		###GET TIMING
 		stop_time_ms = tm.time()
@@ -227,8 +229,8 @@ if __name__ == '__main__':
 #		read_user_input(newstdin)
 	
 		if pid_status.value == 0:
-			ind_set = np.argmax(y_trace1_V)
-		else:
+			ind_set = np.argmax(y_trace1_V) # takes the setpoint 
+		else: # starts locking
 			pid_error = get_error_max(y_trace1_V,ind_set,)
 			pid_error = float(1.*pid_error/buff_len)
 			
@@ -239,20 +241,21 @@ if __name__ == '__main__':
 			
 		###DEFINE OUTPUT
 	   	#rp_s.tx_txt('CR/LF'); #no idea what this one does
-		pid_output_percent = pid_output + pid_offset
+		if do_output == 1:
+			pid_output_percent = pid_output + pid_offset
+			
+			if pid_output_percent < 0:
+				pid_output_percent = 0
+			if pid_output_percent > 100.:
+				pid_output_percent = 100.
 		
-		if pid_output_percent < 0:
-			pid_output_percent = 0
-		if pid_output_percent > 100.:
-			pid_output_percent = 100.
+			print('pid_output_percent', pid_output_percent)
 		
-		print('pid_output_percent', pid_output_percent)
-		
-		pid_output_V = str((1.8/100)*pid_output_percent)     #from 0 - 1.8 volts
-		pin_out_num = '2'  #Analog outputs 0,1,2,3
+			pid_output_V = str((1.8/100)*pid_output_percent)     #from 0 - 1.8 volts
+			pin_out_num = '2'  #Analog outputs 0,1,2,3
 	
-		scpi_command = 'ANALOG:PIN AOUT' + pin_out_num + ',' + pid_output_V
-		rp_s.tx_txt(scpi_command)
+			scpi_command = 'ANALOG:PIN AOUT' + pin_out_num + ',' + pid_output_V
+			rp_s.tx_txt(scpi_command)
 	
 	av_time = (1000.*(stop_time_ms-ini_time_ms ) / num_run)
 	print('averaged run time is ', av_time, ' ms')
