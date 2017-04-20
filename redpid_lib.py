@@ -1,25 +1,16 @@
-#!/usr/bin/env mpython_q
+"""
+RED PID LIB
+
+Library for red pitaya temperature lock
+
+written for python3
+@author: Gerhard Schunk
+April 2016
+"""
 import numpy as np
 import sys, os
 from numpy import NaN, Inf, arange, isscalar, array, asarray
 import ntpath
-
-def int_to_roman(input):
-	"""
-	Convert an integer to Roman numerals.
-	"""
-	if type(input) != type(1):
-		raise TypeError, "expected integer, got %s" % type(input)
-	if not 0 < input < 4000:
-		raise ValueError, "Argument must be between 1 and 3999"   
-	ints = (1000, 900,  500, 400, 100,  90, 50,  40, 10,  9,   5,  4,   1)
-	nums = ('M',  'CM', 'D', 'CD','C', 'XC','L','XL','X','IX','V','IV','I')
-	result = ""
-	for i in range(len(ints)):
-		count = int(input / ints[i])
-		result += nums[i] * count
-		input -= ints[i] * count
-	return result
     
 def ntest(lda,T,pol=0,MgO=0,MgO_th=5.0,E = 0): return 1.5
 
@@ -104,10 +95,10 @@ def smooth(x,window_len=11,window='hanning'):
     """
 
     if x.ndim != 1:
-        raise ValueError, "smooth only accepts 1 dimension arrays."
+        raise ValueError("smooth only accepts 1 dimension arrays.")
 
     if x.size < window_len:
-        raise ValueError, "Input vector needs to be bigger than window size."
+        raise ValueError("Input vector needs to be bigger than window size.")
 
 
     if window_len<3:
@@ -115,7 +106,7 @@ def smooth(x,window_len=11,window='hanning'):
 
 
     if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
-        raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
+        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
 
 
     s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
@@ -303,7 +294,7 @@ def read_agilent_DSOx2024a(expdatfolder,expfilenr=0,expfiletype='csv',grdsubtrac
             y4 = np.append(y4,float(line[4]))
             
     
-    print 'exp data name: ', expfilename, '\n'
+    print('exp data name: ', expfilename, '\n')
 
     if grdsubtract:
         groundsmoothlen = int(round(len(yfreq)/10))
@@ -346,21 +337,21 @@ def read_user_input(newstdin,flag,pid_status,P_pid,I_pid):
         stind_checkout = stind_checkout[:len(stind_checkout)-1]
 								
         if (stind_checkout == "on"):
-	        print 'Start the lock'									
-	        print stind_checkout 
+	        print('Start the lock')
+	        print(stind_checkout)
 	        pid_status.value = 1   
 
         if (stind_checkout == "off"):
-	        print 'Stop the lock'							
-	        print stind_checkout 
+	        print('Stop the lock')
+	        print(stind_checkout)
 	        pid_status.value = 0   
 									
         if (stind_checkout[0] == "P"):
-	        print stind_checkout[1:] 
+	        print(stind_checkout[1:]) 
 	        P_pid.value = int(stind_checkout[1:])    
  
         if (stind_checkout[0] == "I"):
-	        print stind_checkout[1:] 
+	        print(stind_checkout[1:]) 
 	        I_pid.value = int(stind_checkout[1:])    
   											
         if (stind_checkout == "exit"):
