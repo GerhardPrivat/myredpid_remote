@@ -186,7 +186,7 @@ if __name__ == '__main__':
 		
 		###PLOT TRACES		
 		if 1==1:
-			plt.ion()		
+			#plt.ion()		
 			c=next(color)
 			
 			plt_title = ax1.set_title('measured after ' + str(rel_start_time) + ' ms',**title_font)
