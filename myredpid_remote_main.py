@@ -37,7 +37,10 @@ if __name__ == '__main__':
 	I_pid_curr = 0 #Initial setting of I part of pid
 	pid_output = 0 #the pid is starting from 0, but there is an pid offset of 50 percent to start in the middle
 	pid_offset = 50. # start in the middle of the voltage setting
-	
+
+	###PROGRAMM SETTINGS
+	do_plot = 0 #only plots of =1
+    
 	###FOLDER SETTINGS
 	pathname = os.getcwd()
 	print(os.walk(pathname))
@@ -48,44 +51,44 @@ if __name__ == '__main__':
 	data_path = plots_path[:-7] + plots_path[-1] +  'data' + plots_path[-1] 
 		
 	###PLOT SETTINGES
-	title_font = {'fontname':'Arial', 'size':'12', 'color':'black', 'weight':'normal',
-	'verticalalignment':'bottom'} # Bottom vertical alignment for more space
-	#legend_font = {'family':'Times New Roman','size':'8'}
-	title_font = {'size':'11'}
-	axis_font = {'size':'11'}
-	ticks_font = {'size':'11'}
-	label_font = {'size':'11'}
-	legend_font = {'size':'8'}
+	if do_plot == 1:
+		title_font = {'fontname':'Arial', 'size':'12', 'color':'black', 'weight':'normal',
+		'verticalalignment':'bottom'} # Bottom vertical alignment for more space
+		#legend_font = {'family':'Times New Roman','size':'8'}
+		title_font = {'size':'11'}
+		axis_font = {'size':'11'}
+		ticks_font = {'size':'11'}
+		label_font = {'size':'11'}
+		legend_font = {'size':'8'}
 	
-	#plt.clf()
-	fig1 = plt.figure(1,tight_layout=True,figsize=(22.5/2.53, 10./2.53))
+		#plt.clf()
+		fig1 = plt.figure(1,figsize=(22.5/2.53, 10./2.53))
+		ax1 = fig1.add_subplot(311)
+		ax2 = fig1.add_subplot(312)
+		ax3 = fig1.add_subplot(313)
 	
-	ax1 = fig1.add_subplot(311)
-	ax2 = fig1.add_subplot(312)
-	ax3 = fig1.add_subplot(313)
+		fig1.subplots_adjust(left=0.25)
+		fig1.subplots_adjust(bottom=0.25)
+		fig1.subplots_adjust(top=0.90)
+		fig1.subplots_adjust(right=0.95)
 	
-	fig1.subplots_adjust(left=0.25)
-	fig1.subplots_adjust(bottom=0.25)
-	fig1.subplots_adjust(top=0.90)
-	fig1.subplots_adjust(right=0.95)
+		for axis in ['top','bottom','left','right']:
+			ax1.spines[axis].set_linewidth(1.)
+			ax2.spines[axis].set_linewidth(1.)
+			ax3.spines[axis].set_linewidth(1.)
 	
-	for axis in ['top','bottom','left','right']:
-		ax1.spines[axis].set_linewidth(1.)
-		ax2.spines[axis].set_linewidth(1.)
-		ax3.spines[axis].set_linewidth(1.)
+		plt_title = ax1.set_title(' ')
 	
-	plt_title = ax1.set_title(' ')
+		color=cycle(cm.rainbow(np.linspace(0,1,20)))
 	
-	color=cycle(cm.rainbow(np.linspace(0,1,20)))
+		ax1_hdl, = ax1.plot([],[])
+		ax2_hdl, = ax2.plot([],[])
+		ax3_hdl, = ax3.plot([],[])
 	
-	ax1_hdl, = ax1.plot([],[])
-	ax2_hdl, = ax2.plot([],[])
-	ax3_hdl, = ax3.plot([],[])
-	
-	ax1.set_ylabel('Amplitude (V)',**axis_font)
-	ax2.set_ylabel('Amplitude (V)',**axis_font)
-	ax3.set_ylabel('Amplitude (norm.)',**axis_font)
-	ax3.set_xlabel('Time (ms)',**axis_font)
+		ax1.set_ylabel('Amplitude (V)',**axis_font)
+		ax2.set_ylabel('Amplitude (V)',**axis_font)
+		ax3.set_ylabel('Amplitude (norm.)',**axis_font)
+		ax3.set_xlabel('Time (ms)',**axis_font)
 	
 	###REMOTE CONNECTION
 	rp_s = scpi.scpi("10.64.11.12")
@@ -189,7 +192,7 @@ if __name__ == '__main__':
 		print('run time', run_time_ms, ' ms')
 		
 		###PLOT TRACES		
-		if 1==1:
+		if do_plot == 1:
 			#plt.ion()		
 			c=next(color)
 			
@@ -253,24 +256,20 @@ if __name__ == '__main__':
 	
 	av_time = (1000.*(stop_time_ms-ini_time_ms ) / num_run)
 	print('averaged run time is ', av_time, ' ms')
-	###LABELS AND LEGENDS
-	
-	#TICKS
-	ax1.locator_params(axis = 'x', nbins = 6)
-	ax1.locator_params(axis = 'y', nbins = 4)
-		
+
 	###SAVE PLOTS
-	filename = 'oszi_trace'
-	fig1.canvas.draw()
-	xlabels = [item.get_text() for item in ax1.get_xticklabels()]
-	ax1.set_xticklabels(xlabels,**ticks_font)
-	ylabels = [item.get_text() for item in ax1.get_yticklabels()]
-	ax1.set_yticklabels(ylabels,**ticks_font)
+	if do_plot == 1:
+		filename = 'oszi_trace'
+		fig1.canvas.draw()
+		xlabels = [item.get_text() for item in ax1.get_xticklabels()]
+		ax1.set_xticklabels(xlabels,**ticks_font)
+		ylabels = [item.get_text() for item in ax1.get_yticklabels()]
+		ax1.set_yticklabels(ylabels,**ticks_font)
 	
-	#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
-	fig1.savefig(plots_path + '//' + savename + '.png', dpi=300, transparent=True)
+		#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
+		fig1.savefig(plots_path + '//' + savename + '.png', dpi=300, transparent=True)
 	
-	plt.close()
+		plt.close()
 	print('Farewell, master!')
 	sys.exit()
 	
