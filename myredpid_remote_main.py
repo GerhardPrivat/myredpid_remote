@@ -39,7 +39,7 @@ if __name__ == '__main__':
 	pid_offset = 50. # start in the middle of the voltage setting
 
 	###PROGRAMM SETTINGS
-	do_plot = 0 #only plots of =1
+	do_plot = 1 #only plots of =1
     
 	###FOLDER SETTINGS
 	pathname = os.getcwd()
@@ -95,12 +95,12 @@ if __name__ == '__main__':
 	
 	###DATA ACQUISION
 	#best
-	#decimation = int(2**6)
-	#buff_len = 2**12 #2ms
+	decimation = int(2**6)
+	buff_len = 2**12 #2ms
 	
-	decimation = int(2**10)
-	buff_len = 2**10 #2ms
-	num_run = 4
+#	decimation = int(2**10)
+#	buff_len = 2**10 #2ms
+	num_run = 10
 	sample_rate_MHz = 125. / decimation
 	delta_time_ms_ms = 1. / sample_rate_MHz * 10**(-3) 
 	
@@ -213,7 +213,7 @@ if __name__ == '__main__':
 			plt.draw()
 			
 		#SAVE DATA
-		savename = str(ite_meas) + '_test'
+		savename = 'test'
 	#	np.array(y_trace1_V).dump(open(data_path+'\\'+savename+'.npy', 'wb'))
 		#myArray = np.load(open('array.npy', 'rb'))
 		
@@ -259,7 +259,6 @@ if __name__ == '__main__':
 
 	###SAVE PLOTS
 	if do_plot == 1:
-		filename = 'oszi_trace'
 		fig1.canvas.draw()
 		xlabels = [item.get_text() for item in ax1.get_xticklabels()]
 		ax1.set_xticklabels(xlabels,**ticks_font)
@@ -267,7 +266,7 @@ if __name__ == '__main__':
 		ax1.set_yticklabels(ylabels,**ticks_font)
 	
 		#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
-		fig1.savefig(plots_path + '//' + savename + '.png', dpi=300, transparent=True)
+		fig1.savefig(plots_path + savename + '.png', dpi=300, transparent=True)
 	
 		plt.close()
 	print('Farewell, master!')
