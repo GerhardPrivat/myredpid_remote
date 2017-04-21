@@ -5,7 +5,7 @@ MY RED PID REMOTE
 This program acquire date from the red pitaya after an initial trigger pulse and 
 saves the results to the hard disc
 
-PID SETTING EXAMPLE:
+PID SETTINGS EXAMPLE:
 * P and I are between 0 and 100
 * error of pid is the error as number of points between set and actual index
 * gain G simply multiplies the error, should be larger than 1 and considerably smaller than the buffer length (number of points)
@@ -17,18 +17,130 @@ import sys, os
 #os._exit(00)
 #import matplotlib
 #matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import numpy as np
 import pdb
 import redpitaya_scpi as scpi
 import time as tm
 from matplotlib.pyplot import cm 
 from itertools import cycle
-from redpid_lib import autocorr, crosscorr, smooth, tiltcorrect, read_user_input, get_error_max
+#from redpid_lib import autocorr, crosscorr, smooth, tiltcorrect, read_user_input, get_error_max
 import multiprocessing
 import ctypes
 
-###START MAIN PROCESS
+def autocorr(x):
+    "calculates the autocorrelation function for multiple purposes"
+#    result = np.convolve(x, x, mode='same')
+    result = np.convolve(x, np.flipud(x), mode='full')
+    return result[result.size/2.:]
+
+def crosscorr(x,y):
+    "calculates the crosscorrelation function for multiple purposes"
+#    result = np.convolve(x, x, mode='same')
+    result = np.convolve(x, np.flipud(y), mode='full')
+    return result
+
+def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid):
+    "waits for input from the console"
+    newstdinfile = os.fdopen(os.dup(newstdin))
+
+    while True:
+        stind_checkout = newstdinfile.readline()
+        stind_checkout = stind_checkout[:len(stind_checkout)-1]
+
+        if (stind_checkout == "on"):
+	        print('Start the lock')
+	        pid_status.value = 1   
+
+        if (stind_checkout == "off"):
+	        print('Stop the lock')
+	        pid_status.value = 0   
+
+        if (stind_checkout[0] == "P"):
+	        print('New P', stind_checkout[1:]) 
+	        P_pid.value = int(stind_checkout[1:])    
+
+        if (stind_checkout[0] == "I"):
+	        print('New I', stind_checkout[1:]) 
+	        I_pid.value = int(stind_checkout[1:])    
+
+        if (stind_checkout[0] == "G"):
+	        print('New gain', stind_checkout[1:]) 
+	        G_pid.value = int(stind_checkout[1:])
+
+        if (stind_checkout[0] == "O"):
+	        print('New offset', stind_checkout[1:]) 
+	        O_pid.value = int(stind_checkout[1:])
+
+        if (stind_checkout == "exit"):
+	        print('Stop the music')
+	        flag.value = 1
+	        newstdinfile.close()
+
+	        break
+        else:
+	        continue
+
+def smooth(x,window_len=11,window='hanning'):
+    """smooth the data using a window with requested size.
+    
+    http://wiki.scipy.org/Cookbook/SignalSmooth
+    
+    This method is based on the convolution of a scaled window with the signal.
+    The signal is prepared by introducing reflected copies of the signal 
+    (with the window size) in both ends so that transient parts are minimized
+    in the begining and end part of the output signal.
+    
+    input:
+        x: the input signal 
+        window_len: the dimension of the smoothing window; should be an odd integer
+        window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
+            flat window will produce a moving average smoothing.
+
+    output:
+        the smoothed signal
+        
+    example:
+
+    t=linspace(-2,2,0.1)
+    x=sin(t)+randn(len(t))*0.1
+    y=smooth(x)
+    
+    see also: 
+    
+    np.hanning, np.hamming, np.bartlett, np.blackman, np.convolve
+    scipy.signal.lfilter
+ 
+    TODO: the window parameter could be the window itself if an array instead of a string
+    NOTE: length(output) != length(input), to correct this: return y[(window_len/2-1):-(window_len/2)] instead of just y.
+    """
+    if x.ndim != 1:
+        raise ValueError("smooth only accepts 1 dimension arrays.")
+
+    if x.size < window_len:
+        raise ValueError("Input vector needs to be bigger than window size.")
+
+    if window_len<3:
+        return x
+
+    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+
+
+    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
+    #print(len(s))
+    if window == 'flat': #moving average
+        w=np.ones(window_len,'d')
+    else:
+        w=eval('np.'+window+'(window_len)')
+
+    y=np.convolve(w/w.sum(),s,mode='valid')
+    return y[(window_len/2-1):-(window_len/2)]
+
+
+########################################################################
+###MAIN Process
+########################################################################
 "includes plotting"
 if __name__ == '__main__':
 	print("\n\n--------------------------")
@@ -36,12 +148,14 @@ if __name__ == '__main__':
 	print("Start the lock with \"on\" and stop with \"off\"")
 	print("Change P, I or G (e.g \"P10\") or end programm with \"exit\" ")
 	print("--------------------------\n\n")
-
+	
+	tm.sleep(1.)	#to make the programm stable (on windows it...)
+			
 	###PROGRAMM SETTINGS, mainly for debugging
 	do_interactive = 0 #only do interactive plotting for =1
 	do_plot = 0 #only plots of =1
-	do_save_plot = 0 # save all plots
-	do_pid = 1 #only gives an outpu for = 1
+	do_save_plot = 1 # save plots of all traces
+	do_pid = 1 #only calculates the pid for = 1, mainly for debugging
 	do_print_output = 1 #show console output if 1, gets changed according to runtime
 	update_period_s = 2. #uodate time for console output
 	
@@ -97,7 +211,7 @@ if __name__ == '__main__':
 		if do_interactive == 1:
 			plt.ion()
 
-		fig1 = plt.figure(1,figsize=(22.5/2.53, 10./2.53))
+		fig1 = plt.figure(1,figsize=(22.5/2.53, 30./2.53))
 		ax1 = fig1.add_subplot(311)
 		ax2 = fig1.add_subplot(312)
 		ax3 = fig1.add_subplot(313)
@@ -113,16 +227,15 @@ if __name__ == '__main__':
 			ax3.spines[axis].set_linewidth(1.)
 
 		plt_title = ax1.set_title(' ')
-	
-		color=cycle(cm.rainbow(np.linspace(0,1,20)))
-	
+		color=cycle(cm.jet(np.linspace(0,1,100)))
+
 		ax1_hdl, = ax1.plot([],[])
 		ax2_hdl, = ax2.plot([],[])
 		ax3_hdl, = ax3.plot([],[])
 		
 		set_line_hdl = ax3.axvline(1,color='red')
 		act_line_hdl = ax3.axvline(1,color='black')
-			
+
 		ax1.set_ylabel('Amplitude (V)',**axis_font)
 		ax2.set_ylabel('Amplitude (V)',**axis_font)
 		ax3.set_ylabel('Amplitude (norm.)',**axis_font)
@@ -167,7 +280,7 @@ if __name__ == '__main__':
 			
 		rp_s.tx_txt('ACQ:TRIG:DLY ' + str(int(buff_len-1000.)))
 		rp_s.tx_txt('ACQ:START')
-#		tm.sleep(1.)	#pause to refresh buffer
+		tm.sleep(.05)	#pause to refresh buffer
 		rp_s.tx_txt('ACQ:TRIG EXT_PE')
 	
 		
@@ -255,7 +368,8 @@ if __name__ == '__main__':
 			time_trace_cross = range(len(crosscorr_V))
 			time_trace_cross_ms = np.asarray(time_trace_cross) * delta_time_s_ms
 			ind_max_cross = np.argmax(crosscorr_V) # the maximum of the correlation between set_trace and actual trace gives the error
-			pid_error = float(1.*ind_max_cross/buff_len) # error between 0 and 1
+			pid_error_ind = ind_max_cross -buff_len
+			pid_error = float(1.*pid_error_ind/buff_len) # error between 0 and 1
 
 			###CALCULATE PID OUTPUT
 			P_pid_curr = P_pid.value * pid_error # P value should between 0 and 100
@@ -273,7 +387,6 @@ if __name__ == '__main__':
 			elif pid_output_percent > 100.:
 				pid_output_percent = 100.
 
-		
 			pid_output_V = str((1.8/100.)*pid_output_percent)     #from 0 - 1.8 volts
 			pin_out_num = '2'  #Analog outputs 0,1,2,3
 			scpi_command = 'ANALOG:PIN AOUT' + pin_out_num + ',' + pid_output_V
@@ -312,9 +425,9 @@ if __name__ == '__main__':
 				set_line_hdl.remove()
 				act_line_hdl.remove()
 				ax3_hdl, = ax3.plot(time_trace_cross_ms,crosscorr_V,markersize=5,linewidth = 1,color=c)
-				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross + int(buff_len*.5)],color='red')
-				act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len*.5)],color='black')
-				ax3.set_xlim([0.,max(time_trace2_ms)])
+				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross],color='red')
+				act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len)],color='black')
+				ax3.set_xlim([0.3*2.*max(time_trace2_ms),.7*2.*max(time_trace2_ms)])
 
 			if do_interactive == 1:
 				plt.draw()
@@ -332,7 +445,6 @@ if __name__ == '__main__':
 
 				#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
 				fig1.savefig(plots_path + savename + ".png", dpi=300, transparent=True)
-
 
 	plt.close()
 

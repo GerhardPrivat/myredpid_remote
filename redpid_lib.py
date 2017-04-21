@@ -320,8 +320,8 @@ def crosscorr(x,y):
     "calculates the crosscorrelation function for multiple purposes"
 #    result = np.convolve(x, x, mode='same')
     result = np.convolve(x, np.flipud(y), mode='full')
-    return result[result.size/2.:]
-				
+    return result
+
 #    return result
          
 def get_error_correlation(trace_1,trace_2,setpoint_xcorr):
@@ -335,11 +335,11 @@ def get_error_max(trace_1,ind_set):
     "Takes maximum of trace and calculates error max"
     ind_error_max = np.argmax(trace_1) - ind_set
     return ind_error_max
-				
+
 def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid):
-    
+    "waits for input from the console"
     newstdinfile = os.fdopen(os.dup(newstdin))
-    
+
     while True:
         stind_checkout = newstdinfile.readline()
         stind_checkout = stind_checkout[:len(stind_checkout)-1]
@@ -355,11 +355,11 @@ def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid):
         if (stind_checkout[0] == "P"):
 	        print('New P', stind_checkout[1:]) 
 	        P_pid.value = int(stind_checkout[1:])    
- 
+
         if (stind_checkout[0] == "I"):
 	        print('New I', stind_checkout[1:]) 
 	        I_pid.value = int(stind_checkout[1:])    
-									
+
         if (stind_checkout[0] == "G"):
 	        print('New gain', stind_checkout[1:]) 
 	        G_pid.value = int(stind_checkout[1:])
