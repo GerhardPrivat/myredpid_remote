@@ -311,10 +311,17 @@ def read_agilent_DSOx2024a(expdatfolder,expfilenr=0,expfiletype='csv',grdsubtrac
 #    return xfreq_GHz, yfreq, expfilename
                 
 def autocorr(x):
-    "calculates the crosscorrelation function for multiple purposes"
+    "calculates the autocorrelation function for multiple purposes"
 #    result = np.convolve(x, x, mode='same')
     result = np.convolve(x, np.flipud(x), mode='full')
     return result[result.size/2.:]
+				
+def crosscorr(x,y):
+    "calculates the crosscorrelation function for multiple purposes"
+#    result = np.convolve(x, x, mode='same')
+    result = np.convolve(x, np.flipud(y), mode='full')
+    return result[result.size/2.:]
+				
 #    return result
          
 def get_error_correlation(trace_1,trace_2,setpoint_xcorr):
@@ -329,12 +336,11 @@ def get_error_max(trace_1,ind_set):
     ind_error_max = np.argmax(trace_1) - ind_set
     return ind_error_max
 				
-def read_user_input(newstdin,flag,pid_status,P_pid,I_pid):
+def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid):
     
     newstdinfile = os.fdopen(os.dup(newstdin))
     
     while True:
-        print("Change PID or end PID with \"exit\": "),
         stind_checkout = newstdinfile.readline()
         stind_checkout = stind_checkout[:len(stind_checkout)-1]
 								
@@ -349,14 +355,19 @@ def read_user_input(newstdin,flag,pid_status,P_pid,I_pid):
 	        pid_status.value = 0   
 									
         if (stind_checkout[0] == "P"):
-	        print(stind_checkout[1:]) 
+	        print('New P', stind_checkout[1:]) 
 	        P_pid.value = int(stind_checkout[1:])    
  
         if (stind_checkout[0] == "I"):
-	        print(stind_checkout[1:]) 
+	        print('New I', stind_checkout[1:]) 
 	        I_pid.value = int(stind_checkout[1:])    
-  											
+									
+        if ('New G', stind_checkout[0] == "G"):
+	        print(stind_checkout[1:]) 
+	        G_pid.value = int(stind_checkout[1:])
+
         if (stind_checkout == "exit"):
+	        print('Stop the music')
 	        flag.value = 1
 	        newstdinfile.close()
 	        break
