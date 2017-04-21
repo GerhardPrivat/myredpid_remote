@@ -336,24 +336,22 @@ def get_error_max(trace_1,ind_set):
     ind_error_max = np.argmax(trace_1) - ind_set
     return ind_error_max
 				
-def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid):
+def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid):
     
     newstdinfile = os.fdopen(os.dup(newstdin))
     
     while True:
         stind_checkout = newstdinfile.readline()
         stind_checkout = stind_checkout[:len(stind_checkout)-1]
-								
+
         if (stind_checkout == "on"):
 	        print('Start the lock')
-	        print(stind_checkout)
 	        pid_status.value = 1   
 
         if (stind_checkout == "off"):
 	        print('Stop the lock')
-	        print(stind_checkout)
 	        pid_status.value = 0   
-									
+
         if (stind_checkout[0] == "P"):
 	        print('New P', stind_checkout[1:]) 
 	        P_pid.value = int(stind_checkout[1:])    
@@ -362,14 +360,19 @@ def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid):
 	        print('New I', stind_checkout[1:]) 
 	        I_pid.value = int(stind_checkout[1:])    
 									
-        if ('New G', stind_checkout[0] == "G"):
-	        print(stind_checkout[1:]) 
+        if (stind_checkout[0] == "G"):
+	        print('New gain', stind_checkout[1:]) 
 	        G_pid.value = int(stind_checkout[1:])
+
+        if (stind_checkout[0] == "O"):
+	        print('New offset', stind_checkout[1:]) 
+	        O_pid.value = int(stind_checkout[1:])
 
         if (stind_checkout == "exit"):
 	        print('Stop the music')
 	        flag.value = 1
 	        newstdinfile.close()
+
 	        break
         else:
 	        continue

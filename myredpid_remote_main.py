@@ -15,8 +15,8 @@ Created on Thu Apr 06 10:37:27 2017
 """
 import sys, os
 #os._exit(00)
-import matplotlib
-matplotlib.use('Agg')
+#import matplotlib
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pdb
@@ -32,16 +32,18 @@ import ctypes
 "includes plotting"
 if __name__ == '__main__':
 	print("\n\n--------------------------")
-	print("Welcome to the wgmr pid lock")
+	print("WGMR PID LOCK\n")
 	print("Start the lock with \"on\" and stop with \"off\"")
 	print("Change P, I or G (e.g \"P10\") or end programm with \"exit\" ")
-	print("\n\n--------------------------")
+	print("--------------------------\n\n")
 
 	###PROGRAMM SETTINGS, mainly for debugging
-	do_interactive = 1 #only do interactive plotting for =1
-	do_plot = 1 #only plots of =1
-	do_corr = 1 #only correlates of = 1, plot must be on
-	do_output = 1 #only gives an outpu for = 1
+	do_interactive = 0 #only do interactive plotting for =1
+	do_plot = 0 #only plots of =1
+	do_save_plot = 0 # save all plots
+	do_pid = 1 #only gives an outpu for = 1
+	do_print_output = 1 #show console output if 1, gets changed according to runtime
+	update_period_s = 2. #uodate time for console output
 	
 	###THREADING SETTINGS
 	datamanager = multiprocessing.Manager()
@@ -50,7 +52,7 @@ if __name__ == '__main__':
 	pid_status = multiprocessing.Value(ctypes.c_int, 0) # PID is off for 0, on for 1
 
 	#FREQUENCY SWEEP SETTINGS
-	sweep_span_GHz = 1.
+	sweep_span_MHz = 1000.
 
 	###SCPI DATA ACQUISION
 	#best
@@ -61,20 +63,20 @@ if __name__ == '__main__':
 #	buff_len = 2**10 #2ms
 	num_run = 10
 	sample_rate_MHz = 125. / decimation
-	delta_time_ms_ms = 1. / sample_rate_MHz * 10**(-3) 
+	delta_time_s_ms = 1. / sample_rate_MHz * 10**(-3) 
 
 	#PID SETTINGS
-	P_pid = multiprocessing.Value(ctypes.c_int, 10) #the flag is used to terminate the whole program, 0 is running
-	I_pid = multiprocessing.Value(ctypes.c_int, 0)
+	P_pid = multiprocessing.Value(ctypes.c_int, 10) #P part of pid
+	I_pid = multiprocessing.Value(ctypes.c_int, 0) # i part of pid
 	G_pid = multiprocessing.Value(ctypes.c_int, 1) #can also be negative for the lock to work, the pid_offset gets added afterwards
+	O_pid = multiprocessing.Value(ctypes.c_int, 50) #offset for the pid output in per cent, usually 50,  start in the middle of the voltage setting
+
 	I_pid_curr = 0 #Initial setting of I part of pid
 	pid_error = 0 # that is the error signal for the pid between 0 and 1, comes from (index_setpoint - index_actual )
 	pid_output = 0 #the pid is starting from 0, but there is an pid offset of 50 percent to start in the middle
-	pid_offset = 50. # start in the middle of the voltage setting
 
 	###FOLDER SETTINGS
 	pathname = os.getcwd()
-	print(os.walk(pathname))
 	dir_list = [x[0] for x in os.walk(pathname)]
 	for dir_name in dir_list:
 		if not(dir_name.find("plots")) == -1:
@@ -83,7 +85,6 @@ if __name__ == '__main__':
 		
 	###PLOT SETTINGES
 	if do_plot == 1:
-		print("Do the damn plot")
 		title_font = {'fontname':'Arial', 'size':'12', 'color':'black', 'weight':'normal',
 		'verticalalignment':'bottom'} # Bottom vertical alignment for more space
 		#legend_font = {'family':'Times New Roman','size':'8'}
@@ -94,11 +95,8 @@ if __name__ == '__main__':
 		legend_font = {'size':'8'}
 
 		if do_interactive == 1:
-			print("interactive")
 			plt.ion()
-			plt.show()
-			tm.sleep(10.)
-			
+
 		fig1 = plt.figure(1,figsize=(22.5/2.53, 10./2.53))
 		ax1 = fig1.add_subplot(311)
 		ax2 = fig1.add_subplot(312)
@@ -114,7 +112,6 @@ if __name__ == '__main__':
 			ax2.spines[axis].set_linewidth(1.)
 			ax3.spines[axis].set_linewidth(1.)
 
-
 		plt_title = ax1.set_title(' ')
 	
 		color=cycle(cm.rainbow(np.linspace(0,1,20)))
@@ -122,6 +119,7 @@ if __name__ == '__main__':
 		ax1_hdl, = ax1.plot([],[])
 		ax2_hdl, = ax2.plot([],[])
 		ax3_hdl, = ax3.plot([],[])
+		
 		set_line_hdl = ax3.axvline(1,color='red')
 		act_line_hdl = ax3.axvline(1,color='black')
 			
@@ -138,26 +136,38 @@ if __name__ == '__main__':
 #	print 'Nr of runs', num_run
 #	print 'Nr of samples', buff_len
 #	print 'sample_rate_MHz', sample_rate_MHz
-#	print 'sampling distance_ms', delta_time_ms_ms
-	
+#	print 'sampling distance_ms', delta_time_s_ms
+
 	###START RECORDING
 	rp_s.tx_txt('ACQ:RST')
 	rp_s.tx_txt('ACQ:DEC '+str(decimation))
 	rp_s.tx_txt('ACQ:TRIG:LEV 1')
 	
-	ini_time_ms = tm.time()
-	ite_meas = 1
-	for ite_meas in range(num_run):
-#	while flag.value == 0:
-
+	ini_time_s = tm.time()
+	update_time_s = ini_time_s
+	ite_meas = 0
+#	for ite_meas in range(num_run):
+	
+	########################################################################
+	###MAIN LOOP
+	########################################################################
+	while flag.value == 0:
 		if flag == 1:
 			break
 
-		ite_meas =  1
-		start_time_ms = tm.time()
+		ite_meas = ite_meas + 1
+		start_time_s = tm.time()
+		
+#		print(start_time_s - print_update_time_s)
+		if start_time_s - update_time_s > update_period_s:	#check if console output
+			do_print_output = 1
+			update_time_s = tm.time()
+		else:
+			do_print_output = 0
+			
 		rp_s.tx_txt('ACQ:TRIG:DLY ' + str(int(buff_len-1000.)))
 		rp_s.tx_txt('ACQ:START')
-		tm.sleep(1.)	#pause to refresh buffer
+#		tm.sleep(1.)	#pause to refresh buffer
 		rp_s.tx_txt('ACQ:TRIG EXT_PE')
 	
 		
@@ -176,7 +186,7 @@ if __name__ == '__main__':
 		buff = list(map(float, buff_string))
 		y_trace1_V = np.asarray(buff)
 		time_trace1_ms = range(len(y_trace1_V))
-		time_trace1_ms = np.asarray(time_trace1_ms) * delta_time_ms_ms
+		time_trace1_ms = np.asarray(time_trace1_ms) * delta_time_s_ms
 
 	#	while 1:
 	#	    rp_s.tx_txt('ACQ:TRIG:STAT?')
@@ -194,7 +204,7 @@ if __name__ == '__main__':
 		buff = list(map(float, buff_string))
 		y_trace2_V = np.asarray(buff)
 		time_trace2_ms = range(len(y_trace2_V))
-		time_trace2_ms = np.asarray(time_trace2_ms) * delta_time_ms_ms
+		time_trace2_ms = np.asarray(time_trace2_ms) * delta_time_s_ms
 	
 		###PROCESS TRACES
 		smooth_pts = 100.
@@ -209,12 +219,16 @@ if __name__ == '__main__':
 		y_trace2_V = y_trace2_V- np.average(y_trace2_V)
 
 		###GET TIMING
-		stop_time_ms = tm.time()
-		rel_start_time = int(1000.*(start_time_ms - ini_time_ms))
-		run_time_ms = int(1000.*(stop_time_ms - start_time_ms))
+		stop_time_s = tm.time()
+		rel_start_time = int(1000.*(start_time_s - ini_time_s))
+		run_time_s = int(1000.*(stop_time_s - start_time_s))
 		
-		print('\nRelative start time', rel_start_time, ' ms')
-		print('run time for readout', run_time_ms, ' ms')
+		if do_print_output == 1:
+			print("\n")
+			print("start time")
+			print(rel_start_time, " ms")
+			print("run time")
+			print(run_time_s, " ms")
 
 		#SAVE DATA
 		savename = 'test'
@@ -224,9 +238,12 @@ if __name__ == '__main__':
 		###START PID
 		###READ USER INPUT
 		newstdin = sys.stdin.fileno()
-		reading_process = multiprocessing.Process(target=read_user_input, args=(newstdin,flag,pid_status,P_pid,I_pid,G_pid))
+		reading_process = multiprocessing.Process(target=read_user_input, args=(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid))
 		reading_process.start()
-		print('flag, pid_status, P, I ', flag.value, pid_status.value, P_pid.value, I_pid.value, G_pid.value)
+		
+		if do_print_output == 1:
+			print("flag, pid_status, P, I, G, O")
+			print(flag.value, pid_status.value, P_pid.value, I_pid.value, G_pid.value, O_pid.value)
 #		newstdin = sys.stdin.fileno()
 #		read_user_input(newstdin)
 	
@@ -236,12 +253,9 @@ if __name__ == '__main__':
 		else: # starts locking, the PID values are calculated in per cent (between 0 and 100)
 			crosscorr_V = crosscorr(y_trace1_V,y_trace_set_V)
 			time_trace_cross = range(len(crosscorr_V))
-			time_trace_cross_ms = np.asarray(time_trace_cross) * delta_time_ms_ms
+			time_trace_cross_ms = np.asarray(time_trace_cross) * delta_time_s_ms
 			ind_max_cross = np.argmax(crosscorr_V) # the maximum of the correlation between set_trace and actual trace gives the error
 			pid_error = float(1.*ind_max_cross/buff_len) # error between 0 and 1
-
-		if do_corr == 1:
-			y_correllation = autocorr(y_trace1_V)
 
 			###CALCULATE PID OUTPUT
 			P_pid_curr = P_pid.value * pid_error # P value should between 0 and 100
@@ -252,28 +266,40 @@ if __name__ == '__main__':
 
 		###SET PID OUTPUT
 		#rp_s.tx_txt('CR/LF'); #no idea what this one does
-		if do_output == 1:
-			pid_output_percent = pid_output + pid_offset # pid_offset let's the output start in the middle (50) to have the maximal range.
+		if do_pid == 1:
+			pid_output_percent = pid_output + O_pid.value # pid_offset let's the output start in the middle (50) to have the maximal range.
 			if pid_output_percent < 0:
 				pid_output_percent = 0
-			if pid_output_percent > 100.:
+			elif pid_output_percent > 100.:
 				pid_output_percent = 100.
-		
-			print('pid output_percent of max output voltage', pid_output_percent)
+
 		
 			pid_output_V = str((1.8/100.)*pid_output_percent)     #from 0 - 1.8 volts
 			pin_out_num = '2'  #Analog outputs 0,1,2,3
-	
 			scpi_command = 'ANALOG:PIN AOUT' + pin_out_num + ',' + pid_output_V
 			rp_s.tx_txt(scpi_command)
 
+			pid_error_MHz = pid_error * sweep_span_MHz
+
+			if do_print_output == 1:
+				av_time_ms = (1000.*(stop_time_s-ini_time_s ) / ite_meas)
+				print("averaged run time of programm")
+				print(av_time_ms, ' ms')
+				
+			if do_print_output == 1:
+				print("pid_error (pcent), pid_error (MHz), pid_offset (pcent), pid_output (V)")
+#				print(np.round(1000.*pid_error)/1000.,np.round(1000.*pid_error_MHz)/1000.,np.round(1000.*pid_offset)/1000.,np.round(1000.*pid_output_V)/1000.)
+				print(pid_error,pid_error_MHz,O_pid.value,pid_output_V)
+
 		###PLOT TRACES
 		if do_plot == 1:
-			
 			plt_title = ax1.set_title('measured after ' + str(rel_start_time) + ' ms',**title_font)
-			ax1_hdl.remove()
-			c=next(color)
 
+			c=next(color)
+#			ax1_hdl.set_xdata(time_trace1_ms)
+#			ax1_hdl.set_ydata(y_trace1_V)
+
+			ax1_hdl.remove()
 			ax1_hdl, = ax1.plot(time_trace1_ms,y_trace1_V,markersize=5,linewidth = 1,color=c)
 			ax1.set_xlim([0.,max(time_trace1_ms)])
 
@@ -288,28 +314,28 @@ if __name__ == '__main__':
 				ax3_hdl, = ax3.plot(time_trace_cross_ms,crosscorr_V,markersize=5,linewidth = 1,color=c)
 				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross + int(buff_len*.5)],color='red')
 				act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len*.5)],color='black')
-	#		ax3.set_xlim([0.,max(time_correllation_ms)])
+				ax3.set_xlim([0.,max(time_trace2_ms)])
 
-			plt.draw()
-			print("draw the figure")
-			tm.sleep(1.)
+			if do_interactive == 1:
+				plt.draw()
+#				tm.sleep(1.)
 
-	av_time = (1000.*(stop_time_ms-ini_time_ms ) / num_run)
-	print('averaged run time of complete programm is ', av_time, ' ms')
+			###SAVE PLOTS
+			if do_save_plot == 1 and do_print_output:
+				fig1.canvas.draw()
+				xlabels = [item.get_text() for item in ax1.get_xticklabels()]
+				ax1.set_xticklabels(xlabels,**ticks_font)
+				ylabels = [item.get_text() for item in ax1.get_yticklabels()]
+				ax1.set_yticklabels(ylabels,**ticks_font)
+#				if do_print_output == 1:
+#					print("save plot in",plots_path + savename + ".png")
 
-	###SAVE PLOTS
-	if do_plot == 1:
-		fig1.canvas.draw()
-		xlabels = [item.get_text() for item in ax1.get_xticklabels()]
-		ax1.set_xticklabels(xlabels,**ticks_font)
-		ylabels = [item.get_text() for item in ax1.get_yticklabels()]
-		ax1.set_yticklabels(ylabels,**ticks_font)
-		print("save plot in",plots_path + savename + '.png')
+				#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
+				fig1.savefig(plots_path + savename + ".png", dpi=300, transparent=True)
 
-		#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
-		fig1.savefig(plots_path + savename + '.png', dpi=300, transparent=True)
-		plt.close()
 
-	print('Farewell, master!')
+	plt.close()
+
+	print("Farewell, master!")
 	sys.exit()
 	
