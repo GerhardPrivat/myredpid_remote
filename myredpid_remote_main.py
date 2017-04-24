@@ -446,7 +446,8 @@ if __name__ == '__main__':
 				#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
 				fig1.savefig(plots_path + savename + ".png", dpi=300, transparent=True)
 
-	plt.close()
+	if do_save_plot == 1
+		plt.close()
 
 	print("Farewell, master!")
 	sys.exit()
