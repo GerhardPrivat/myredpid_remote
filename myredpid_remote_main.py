@@ -152,9 +152,9 @@ if __name__ == '__main__':
 	tm.sleep(1.)	#to make the programm stable (on windows it...)
 			
 	###PROGRAMM SETTINGS, mainly for debugging
-	do_interactive = 0 #only do interactive plotting for =1
-	do_plot = 0 #only plots of =1
-	do_save_plot = 0 # save plots of all traces
+	do_interactive = 1 #only do interactive plotting for =1
+	do_plot = 1 #only plots of =1
+	do_save_plot = 1 # save plots of all traces
 	do_pid = 1 #only calculates the pid for = 1, mainly for debugging
 	do_print_output = 1 #show console output if 1, gets changed according to runtime
 	update_period_s = 2. #uodate time for console output
@@ -250,6 +250,12 @@ if __name__ == '__main__':
 #	print 'Nr of samples', buff_len
 #	print 'sample_rate_MHz', sample_rate_MHz
 #	print 'sampling distance_ms', delta_time_s_ms
+
+	###START PID
+	###READ USER INPUT
+	newstdin = sys.stdin.fileno()
+	reading_process = multiprocessing.Process(target=read_user_input, args=(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid))
+	reading_process.start()
 
 	###START RECORDING
 	rp_s.tx_txt('ACQ:RST')
@@ -348,11 +354,6 @@ if __name__ == '__main__':
 	#	np.array(y_trace1_V).dump(open(data_path+'\\'+savename+'.npy', 'wb'))
 		#myArray = np.load(open('array.npy', 'rb'))
 		
-		###START PID
-		###READ USER INPUT
-		newstdin = sys.stdin.fileno()
-		reading_process = multiprocessing.Process(target=read_user_input, args=(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid))
-		reading_process.start()
 		
 		if do_print_output == 1:
 			print("flag, pid_status, P, I, G, O")
@@ -398,7 +399,7 @@ if __name__ == '__main__':
 				av_time_ms = (1000.*(stop_time_s-ini_time_s ) / ite_meas)
 				print("averaged run time of programm")
 				print(av_time_ms, ' ms')
-				
+
 			if do_print_output == 1:
 				print("pid_error (pcent), pid_error (MHz), pid_offset (pcent), pid_output (V)")
 #				print(np.round(1000.*pid_error)/1000.,np.round(1000.*pid_error_MHz)/1000.,np.round(1000.*pid_offset)/1000.,np.round(1000.*pid_output_V)/1000.)
