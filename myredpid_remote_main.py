@@ -154,6 +154,7 @@ if __name__ == '__main__':
 	###PROGRAMM SETTINGS, mainly for debugging
 	do_interactive = 1 #only do interactive plotting for =1
 	do_plot = 1 #only plots of =1
+	do_loop_saving = 0 #saves every trace of the loop! Be careful
 	do_save_plot = 1 # save plots of all traces
 	do_pid = 1 #only calculates the pid for = 1, mainly for debugging
 	do_print_output = 1 #show console output if 1, gets changed according to runtime
@@ -190,6 +191,7 @@ if __name__ == '__main__':
 	pid_output = 0 #the pid is starting from 0, but there is an pid offset of 50 percent to start in the middle
 
 	###FOLDER SETTINGS
+	savename = 'test'
 	pathname = os.getcwd()
 	dir_list = [x[0] for x in os.walk(pathname)]
 	for dir_name in dir_list:
@@ -350,8 +352,9 @@ if __name__ == '__main__':
 			print(run_time_s, " ms")
 
 		#SAVE DATA
-		savename = 'test'
-	#	np.array(y_trace1_V).dump(open(data_path+'\\'+savename+'.npy', 'wb'))
+		if do_loop_saving == 1:
+			savename_loop = savename + '_trace1_nr_' +str(ite_meas)
+		np.array(y_trace1_V).dump(open(data_path+'\\'+savename_loop+'.npy', 'wb'))
 		#myArray = np.load(open('array.npy', 'rb'))
 		
 		
@@ -445,7 +448,7 @@ if __name__ == '__main__':
 #					print("save plot in",plots_path + savename + ".png")
 
 				#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
-				fig1.savefig(plots_path + savename + ".png", dpi=300, transparent=True)
+				fig1.savefig(plots_path + savename_loop + ".png", dpi=300, transparent=True)
 
 	if do_save_plot == 1:
 		plt.close()
