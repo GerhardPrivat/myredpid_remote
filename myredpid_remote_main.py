@@ -17,7 +17,7 @@ import sys, os
 #os._exit(00)
 #import matplotlib
 #matplotlib.use('Agg')
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import numpy as np
 import pdb
 import redpitaya_scpi as scpi
@@ -154,7 +154,7 @@ if __name__ == '__main__':
 	###PROGRAMM SETTINGS, mainly for debugging
 	do_interactive = 0 #only do interactive plotting for =1
 	do_plot = 0 #only plots of =1
-	do_save_plot = 1 # save plots of all traces
+	do_save_plot = 0 # save plots of all traces
 	do_pid = 1 #only calculates the pid for = 1, mainly for debugging
 	do_print_output = 1 #show console output if 1, gets changed according to runtime
 	update_period_s = 2. #uodate time for console output
@@ -446,7 +446,7 @@ if __name__ == '__main__':
 				#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
 				fig1.savefig(plots_path + savename + ".png", dpi=300, transparent=True)
 
-	if do_save_plot == 1
+	if do_save_plot == 1:
 		plt.close()
 
 	print("Farewell, master!")
