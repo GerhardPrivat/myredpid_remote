@@ -146,28 +146,27 @@ if __name__ == '__main__':
 	print("\n\n--------------------------")
 	print("WGMR PID LOCK\n")
 	print("Start the lock with \"on\" and stop with \"off\"")
-	print("Change P, I or G (e.g \"P10\") or end programm with \"exit\" ")
+	print("Change P, I, or G (e.g \"P10\") or end programm with \"exit\" ")
 	print("--------------------------\n\n")
 	
 	tm.sleep(1.)	#to make the programm stable (on windows it...)
 			
 	###PROGRAMM SETTINGS, mainly for debugging
-	do_interactive = 1 #only do interactive plotting for =1
+	do_interactive = 0 #only do interactive plotting for =1
 	do_plot = 1 #only plots of =1
+	do_show_plot = 0 #shows the plot and puts the programm on hold, use to get the FP peaks
 	do_loop_saving = 0 #saves every trace of the loop! Be careful
-	do_save_plot = 1 # save plots of all traces
+	do_piderror_plot = 1 #saves every trace of the loop! Be careful
+	do_save = 1 # save plots, trace data and shift data
 	do_pid = 1 #only calculates the pid for = 1, mainly for debugging
 	do_print_output = 1 #show console output if 1, gets changed according to runtime
-	update_period_s = 2. #uodate time for console output
+	update_period_s = 3. #uodate time for console output
 	
 	###THREADING SETTINGS
 	datamanager = multiprocessing.Manager()
 	datalist = datamanager.list()
 	flag = multiprocessing.Value(ctypes.c_int, 0) #the flag is used to terminate the whole program, 0 is running
 	pid_status = multiprocessing.Value(ctypes.c_int, 0) # PID is off for 0, on for 1
-
-	#FREQUENCY SWEEP SETTINGS
-	sweep_span_MHz = 1000.
 
 	###SCPI DATA ACQUISION
 	#best
@@ -179,6 +178,11 @@ if __name__ == '__main__':
 	num_run = 10
 	sample_rate_MHz = 125. / decimation
 	delta_time_s_ms = 1. / sample_rate_MHz * 10**(-3) 
+
+	#FREQUENCY SWEEP SETTINGS
+	t1_FP_ms = 0.35 #time of first Fabry Perot peak 
+	t2_FP_ms = 2.2 #time of second Fabry Perot peak
+	sweep_span_MHz = buff_len * delta_time_s_ms / (t2_FP_ms-t1_FP_ms) * 1000. #complete span of trace
 
 	#PID SETTINGS
 	P_pid = multiprocessing.Value(ctypes.c_int, 10) #P part of pid
@@ -213,7 +217,7 @@ if __name__ == '__main__':
 		if do_interactive == 1:
 			plt.ion()
 
-		fig1 = plt.figure(1,figsize=(22.5/2.53, 30./2.53))
+		fig1 = plt.figure(1,figsize=(22.5/2.53, 25./2.53))
 		ax1 = fig1.add_subplot(311)
 		ax2 = fig1.add_subplot(312)
 		ax3 = fig1.add_subplot(313)
@@ -239,10 +243,25 @@ if __name__ == '__main__':
 		act_line_hdl = ax3.axvline(1,color='black')
 
 		ax1.set_ylabel('Amplitude (V)',**axis_font)
+		ax1.set_xlabel('Time (ms)',**axis_font)
 		ax2.set_ylabel('Amplitude (V)',**axis_font)
+		ax2.set_xlabel('Frequency (MHz)',**axis_font)
 		ax3.set_ylabel('Amplitude (norm.)',**axis_font)
-		ax3.set_xlabel('Time (ms)',**axis_font)
-	
+		ax3.set_xlabel('Frequency (MHz)',**axis_font)
+
+
+		if do_piderror_plot == 1:
+			fig2 = plt.figure(2,figsize=(22.5/2.53, 8./2.53))
+			fig2.subplots_adjust(left=0.25)
+			fig2.subplots_adjust(bottom=0.25)
+			fig2.subplots_adjust(top=0.90)
+			fig2.subplots_adjust(right=0.95)
+
+			ax21 = fig2.add_subplot(111)
+			ax21_hdl, = ax21.plot([],[])
+			ax21.set_xlabel('Time (s)',**axis_font)
+			ax21.set_ylabel('Pid error (MHz)',**axis_font)
+
 	###REMOTE CONNECTION
 	rp_s = scpi.scpi("10.64.11.12")
 	
@@ -265,6 +284,7 @@ if __name__ == '__main__':
 	rp_s.tx_txt('ACQ:TRIG:LEV 1')
 	
 	ini_time_s = tm.time()
+	time_pid_error_list_s, pid_error_list_pts, pid_error_list_MHz = [], [], []
 	update_time_s = ini_time_s
 	ite_meas = 0
 #	for ite_meas in range(num_run):
@@ -278,7 +298,7 @@ if __name__ == '__main__':
 
 		ite_meas = ite_meas + 1
 		start_time_s = tm.time()
-		
+		time_pid_error_list_s.append(start_time_s - ini_time_s)
 #		print(start_time_s - print_update_time_s)
 		if start_time_s - update_time_s > update_period_s:	#check if console output
 			do_print_output = 1
@@ -352,12 +372,12 @@ if __name__ == '__main__':
 			print(run_time_s, " ms")
 
 		#SAVE DATA
+
 		if do_loop_saving == 1:
 			savename_loop = savename + '_trace1_nr_' +str(ite_meas)
-		np.array(y_trace1_V).dump(open(data_path+'\\'+savename_loop+'.npy', 'wb'))
-		#myArray = np.load(open('array.npy', 'rb'))
-		
-		
+		else:
+			savename_loop = savename
+
 		if do_print_output == 1:
 			print("flag, pid_status, P, I, G, O")
 			print(flag.value, pid_status.value, P_pid.value, I_pid.value, G_pid.value, O_pid.value)
@@ -366,7 +386,7 @@ if __name__ == '__main__':
 	
 		if pid_status.value == 0:
 			y_trace_set_V = y_trace1_V # takes the setpoint 
-
+			
 		else: # starts locking, the PID values are calculated in per cent (between 0 and 100)
 			crosscorr_V = crosscorr(y_trace1_V,y_trace_set_V)
 			time_trace_cross = range(len(crosscorr_V))
@@ -396,8 +416,11 @@ if __name__ == '__main__':
 			scpi_command = 'ANALOG:PIN AOUT' + pin_out_num + ',' + pid_output_V
 			rp_s.tx_txt(scpi_command)
 
+			###calculate error in MHz for SAVING
 			pid_error_MHz = pid_error * sweep_span_MHz
-
+			pid_error_list_pts.append(pid_error*buff_len)
+			pid_error_list_MHz.append(pid_error_MHz)
+			
 			if do_print_output == 1:
 				av_time_ms = (1000.*(stop_time_s-ini_time_s ) / ite_meas)
 				print("averaged run time of programm")
@@ -407,6 +430,9 @@ if __name__ == '__main__':
 				print("pid_error (pcent), pid_error (MHz), pid_offset (pcent), pid_output (V)")
 #				print(np.round(1000.*pid_error)/1000.,np.round(1000.*pid_error_MHz)/1000.,np.round(1000.*pid_offset)/1000.,np.round(1000.*pid_output_V)/1000.)
 				print(pid_error,pid_error_MHz,O_pid.value,pid_output_V)
+		else:
+			pid_error_list_pts.append(0)
+			pid_error_list_MHz.append(0)
 
 		###PLOT TRACES
 		if do_plot == 1:
@@ -421,37 +447,58 @@ if __name__ == '__main__':
 			ax1.set_xlim([0.,max(time_trace1_ms)])
 
 			ax2_hdl.remove()
-			ax2_hdl, = ax2.plot(time_trace2_ms,y_trace2_V,markersize=5,linewidth = 1,color=c)
-			ax2.set_xlim([0.,max(time_trace2_ms)])
+			ax2_hdl, = ax2.plot(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz - sweep_span_MHz,y_trace2_V,markersize=5,linewidth = 1,color=c)
+			ax2.set_xlim([0.,sweep_span_MHz])
 
 			if pid_status.value == 1:
 				ax3_hdl.remove()
 				set_line_hdl.remove()
 				act_line_hdl.remove()
-				ax3_hdl, = ax3.plot(time_trace_cross_ms,crosscorr_V,markersize=5,linewidth = 1,color=c)
-				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross],color='red')
-				act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len)],color='black')
-				ax3.set_xlim([0.3*2.*max(time_trace2_ms),.7*2.*max(time_trace2_ms)])
+				ax3_hdl, = ax3.plot(time_trace_cross_ms / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,crosscorr_V,markersize=5,linewidth = 1,color=c)
+				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='red')
+				act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len)] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='black')
+#				ax3.set_xlim([0.4*2.*sweep_span_MHz,.6*2*sweep_span_MHz])
+				ax3.set_xlim([-0.1*2.*sweep_span_MHz,.1*2*sweep_span_MHz])
+			if do_piderror_plot == 1:
+				ax21_hdl.remove()
+				ax21_hdl, = ax21.plot(time_pid_error_list_s,pid_error_list_MHz,markersize=5,linewidth = 1,color='black')
+
+			if do_show_plot ==1:
+				plt.show()
 
 			if do_interactive == 1:
 				plt.draw()
 #				tm.sleep(1.)
 
-			###SAVE PLOTS
-			if do_save_plot == 1 and do_print_output:
+			###SAVE PLOTS AND DATA
+			if do_save == 1 and do_print_output:
+				###SAVE TRACE PLOTS
 				fig1.canvas.draw()
 				xlabels = [item.get_text() for item in ax1.get_xticklabels()]
 				ax1.set_xticklabels(xlabels,**ticks_font)
 				ylabels = [item.get_text() for item in ax1.get_yticklabels()]
 				ax1.set_yticklabels(ylabels,**ticks_font)
-#				if do_print_output == 1:
-#					print("save plot in",plots_path + savename + ".png")
-
 				#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
 				fig1.savefig(plots_path + savename_loop + ".png", dpi=300, transparent=True)
 
-	if do_save_plot == 1:
+				###SAVE TRACE DATA
+				np.array(y_trace1_V).dump(open(data_path+'\\'+savename_loop+'.npy', 'wb')) #myArray = np.load(open('array.npy', 'rb'))
+
+				if do_piderror_plot == 1:
+					fig2.savefig(plots_path + savename+ "_piderro_TinS_ERRinPTS_ERRinMHZ.png", dpi=300, transparent=True)
+
+
+	if do_plot == 1:
 		plt.close()
+
+		###SAVE PID ERROR DATA
+	f_piderror = open(data_path + savename + '_piderror.dat',"w")
+	f_piderror.truncate()
+	
+	for ite in range(len(time_pid_error_list_s)):
+		f_piderror.write(str(time_pid_error_list_s[ite]) + '\t' + str(pid_error_list_pts[ite]) + '\t' + str(pid_error_list_MHz[ite]) + '\n')
+
+	f_piderror.close()
 
 	print("Farewell, master!")
 	sys.exit()
