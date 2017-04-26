@@ -24,7 +24,7 @@ import redpitaya_scpi as scpi
 import time as tm
 from matplotlib.pyplot import cm 
 from itertools import cycle
-#from redpid_lib import autocorr, crosscorr, smooth, tiltcorrect, read_user_input, get_error_max
+from redpid_lib import tiltcorrect
 import multiprocessing
 import ctypes
 
@@ -149,19 +149,19 @@ if __name__ == '__main__':
 	print("Change P, I, or G (e.g \"P10\") or end programm with \"exit\" ")
 	print("--------------------------\n\n")
 	
-	tm.sleep(1.)	#to make the programm stable (on windows it...)
+#	tm.sleep(1.)	#to make the programm stable (on windows it...)
 			
 	###PROGRAMM SETTINGS, mainly for debugging
 	do_interactive = 0 #only do interactive plotting for =1
 	do_plot = 1 #only plots of =1
 	do_show_plot = 0 #shows the plot and puts the programm on hold, use to get the FP peaks
-	do_loop_saving = 0 #saves every trace of the loop! Be careful
-	do_piderror_plot = 1 #saves every trace of the loop! Be careful
-	do_save = 1 # save plots, trace data and shift data
-	do_pid = 1 #only calculates the pid for = 1, mainly for debugging
+	do_pid_output = 0 #only does pid output voltage for = 1, mainly for debugging
 	do_print_output = 1 #show console output if 1, gets changed according to runtime
-	update_period_s = 3. #uodate time for console output
-	
+	update_period_s = 0.1 #uodate time for console output
+	do_save = 1 # save plots, trace data and shift data
+	do_loop_saving = 1 #saves every trace of the loop! Be careful
+	do_piderror_plot = 1 #saves every trace of the loop! Be careful
+
 	###THREADING SETTINGS
 	datamanager = multiprocessing.Manager()
 	datalist = datamanager.list()
@@ -171,7 +171,7 @@ if __name__ == '__main__':
 	###SCPI DATA ACQUISION
 	#best
 	decimation = int(2**6)
-	buff_len = 2**12 #2ms
+	buff_len = 2**14 #2ms, maximal 2**14
 
 #	decimation = int(2**10)
 #	buff_len = 2**10 #2ms
@@ -180,22 +180,22 @@ if __name__ == '__main__':
 	delta_time_s_ms = 1. / sample_rate_MHz * 10**(-3) 
 
 	#FREQUENCY SWEEP SETTINGS
-	t1_FP_ms = 0.35 #time of first Fabry Perot peak 
-	t2_FP_ms = 2.2 #time of second Fabry Perot peak
+	t1_FP_ms = 1.55 #time of first Fabry Perot peak 
+	t2_FP_ms = 4.68 #time of second Fabry Perot peak
 	sweep_span_MHz = buff_len * delta_time_s_ms / (t2_FP_ms-t1_FP_ms) * 1000. #complete span of trace
 
 	#PID SETTINGS
 	P_pid = multiprocessing.Value(ctypes.c_int, 10) #P part of pid
 	I_pid = multiprocessing.Value(ctypes.c_int, 0) # i part of pid
 	G_pid = multiprocessing.Value(ctypes.c_int, 1) #can also be negative for the lock to work, the pid_offset gets added afterwards
-	O_pid = multiprocessing.Value(ctypes.c_int, 50) #offset for the pid output in per cent, usually 50,  start in the middle of the voltage setting
+	O_pid = multiprocessing.Value(ctypes.c_int, 0) #offset for the pid output in per cent, usually 50,  start in the middle of the voltage setting
 
 	I_pid_curr = 0 #Initial setting of I part of pid
 	pid_error = 0 # that is the error signal for the pid between 0 and 1, comes from (index_setpoint - index_actual )
 	pid_output = 0 #the pid is starting from 0, but there is an pid offset of 50 percent to start in the middle
 
 	###FOLDER SETTINGS
-	savename = 'test'
+	savename = 'Tstabilitz_9960 degree'
 	pathname = os.getcwd()
 	dir_list = [x[0] for x in os.walk(pathname)]
 	for dir_name in dir_list:
@@ -282,7 +282,8 @@ if __name__ == '__main__':
 	rp_s.tx_txt('ACQ:RST')
 	rp_s.tx_txt('ACQ:DEC '+str(decimation))
 	rp_s.tx_txt('ACQ:TRIG:LEV 1')
-	
+
+	print('Connect successfull')
 	ini_time_s = tm.time()
 	time_pid_error_list_s, pid_error_list_pts, pid_error_list_MHz = [], [], []
 	update_time_s = ini_time_s
@@ -306,12 +307,11 @@ if __name__ == '__main__':
 		else:
 			do_print_output = 0
 			
-		rp_s.tx_txt('ACQ:TRIG:DLY ' + str(int(buff_len-1000.)))
+		rp_s.tx_txt('ACQ:TRIG:DLY ' + str(int(buff_len / 2.)))
 		rp_s.tx_txt('ACQ:START')
-		tm.sleep(.05)	#pause to refresh buffer
+#		tm.sleep(.05)	#pause to refresh buffer
 		rp_s.tx_txt('ACQ:TRIG EXT_PE')
-	
-		
+
 		while 1:
 		    rp_s.tx_txt('ACQ:TRIG:STAT?')
 		    rcv = 	rp_s.rx_txt() 
@@ -329,13 +329,13 @@ if __name__ == '__main__':
 		time_trace1_ms = range(len(y_trace1_V))
 		time_trace1_ms = np.asarray(time_trace1_ms) * delta_time_s_ms
 
-	#	while 1:
-	#	    rp_s.tx_txt('ACQ:TRIG:STAT?')
-	#	    rcv = 	rp_s.rx_txt() 
-	##	    print rcv
-	#	    if rcv == 'TD':
-	#	        break
-	#	tm.sleep(.1)	#pause to refresh buffer
+#		rp_s.tx_txt('ACQ:TRIG EXT_PE')
+#		while 1:
+#		    rp_s.tx_txt('ACQ:TRIG:STAT?')
+#		    rcv = 	rp_s.rx_txt() 
+#	#	    print rcv
+#		    if rcv == 'TD':
+#		        break
 
 		###READ TACE 2
 	#	rp_s.tx_txt('ACQ:SOUR2:DATA?')
@@ -348,16 +348,17 @@ if __name__ == '__main__':
 		time_trace2_ms = np.asarray(time_trace2_ms) * delta_time_s_ms
 	
 		###PROCESS TRACES
-		smooth_pts = 100.
+		smooth_pts = 10.
 		time_trace1_ms = smooth(time_trace1_ms,smooth_pts)
 		y_trace1_V = smooth(y_trace1_V,smooth_pts)
-	#	y_trace1_V = tiltcorrect(y_trace1_V)
-		y_trace1_V = y_trace1_V- np.min(y_trace1_V)
-		y_trace1_V = np.abs(y_trace1_V)
+#		y_trace1_V = tiltcorrect(y_trace1_V)
+#		y_trace1_V = y_trace1_V / np.max(y_trace1_V)
+#		y_trace1_V = y_trace1_V- np.max(y_trace1_V) + 1
+
 
 		time_trace2_ms = smooth(time_trace2_ms,3)
 		y_trace2_V = smooth(y_trace2_V,3)
-		y_trace2_V = y_trace2_V- np.average(y_trace2_V)
+#		y_trace2_V = y_trace2_V- np.average(y_trace2_V)
 
 		###GET TIMING
 		stop_time_s = tm.time()
@@ -374,7 +375,8 @@ if __name__ == '__main__':
 		#SAVE DATA
 
 		if do_loop_saving == 1:
-			savename_loop = savename + '_trace1_nr_' +str(ite_meas)
+			savename_loop = savename + '_trace' +str(ite_meas)
+#			print('savename_loop',savename_loop)
 		else:
 			savename_loop = savename
 
@@ -386,13 +388,17 @@ if __name__ == '__main__':
 	
 		if pid_status.value == 0:
 			y_trace_set_V = y_trace1_V # takes the setpoint 
-			
+			pid_error = 0
+			pid_error_MHz = 0
+			pid_error_list_pts.append(0)
+			pid_error_list_MHz.append(0)
+
 		else: # starts locking, the PID values are calculated in per cent (between 0 and 100)
 			crosscorr_V = crosscorr(y_trace1_V,y_trace_set_V)
 			time_trace_cross = range(len(crosscorr_V))
 			time_trace_cross_ms = np.asarray(time_trace_cross) * delta_time_s_ms
 			ind_max_cross = np.argmax(crosscorr_V) # the maximum of the correlation between set_trace and actual trace gives the error
-			pid_error_ind = ind_max_cross -buff_len
+			pid_error_ind = ind_max_cross -buff_len #can be negative
 			pid_error = float(1.*pid_error_ind/buff_len) # error between 0 and 1
 
 			###CALCULATE PID OUTPUT
@@ -402,10 +408,21 @@ if __name__ == '__main__':
 			pid_output = P_pid_curr + I_pid_curr # pid_output should be within 0 and 100
 			pid_output_with_gain = pid_output * G_pid.value
 
-		###SET PID OUTPUT
+			###calculate error in MHz for SAVING
+			pid_error_MHz = pid_error * sweep_span_MHz
+			pid_error_list_pts.append(pid_error*buff_len)
+			pid_error_list_MHz.append(pid_error_MHz)
+
+		if do_print_output == 1:
+			av_time_ms = (1000.*(stop_time_s-ini_time_s ) / ite_meas)
+			print("averaged run time of programm")
+			print(av_time_ms, ' ms')
+
+		###SET PID VOLTAGE OUTPUT
 		#rp_s.tx_txt('CR/LF'); #no idea what this one does
-		if do_pid == 1:
+		if do_pid_output == 1:
 			pid_output_percent = pid_output + O_pid.value # pid_offset let's the output start in the middle (50) to have the maximal range.
+
 			if pid_output_percent < 0:
 				pid_output_percent = 0
 			elif pid_output_percent > 100.:
@@ -416,23 +433,14 @@ if __name__ == '__main__':
 			scpi_command = 'ANALOG:PIN AOUT' + pin_out_num + ',' + pid_output_V
 			rp_s.tx_txt(scpi_command)
 
-			###calculate error in MHz for SAVING
-			pid_error_MHz = pid_error * sweep_span_MHz
-			pid_error_list_pts.append(pid_error*buff_len)
-			pid_error_list_MHz.append(pid_error_MHz)
-			
-			if do_print_output == 1:
-				av_time_ms = (1000.*(stop_time_s-ini_time_s ) / ite_meas)
-				print("averaged run time of programm")
-				print(av_time_ms, ' ms')
-
-			if do_print_output == 1:
-				print("pid_error (pcent), pid_error (MHz), pid_offset (pcent), pid_output (V)")
-#				print(np.round(1000.*pid_error)/1000.,np.round(1000.*pid_error_MHz)/1000.,np.round(1000.*pid_offset)/1000.,np.round(1000.*pid_output_V)/1000.)
+		if do_print_output == 1:
+			if do_pid_output == 0:
+				print("pid_error (pcent), pid_error (MHz), pid_offset (pcent))")
+#			print(np.round(1000.*pid_error)/1000.,np.round(1000.*pid_error_MHz)/1000.,np.round(1000.*pid_offset)/1000.,np.round(1000.*pid_output_V)/1000.)
+				print(pid_error,pid_error_MHz,O_pid.value)
+			else:
+				print("pid_error (pcent), pid_error (MHz), pid_offset (pcent),  (V)")
 				print(pid_error,pid_error_MHz,O_pid.value,pid_output_V)
-		else:
-			pid_error_list_pts.append(0)
-			pid_error_list_MHz.append(0)
 
 		###PLOT TRACES
 		if do_plot == 1:
@@ -447,8 +455,8 @@ if __name__ == '__main__':
 			ax1.set_xlim([0.,max(time_trace1_ms)])
 
 			ax2_hdl.remove()
-			ax2_hdl, = ax2.plot(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz - sweep_span_MHz,y_trace2_V,markersize=5,linewidth = 1,color=c)
-			ax2.set_xlim([0.,sweep_span_MHz])
+			ax2_hdl, = ax2.plot(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz,y_trace2_V,markersize=5,linewidth = 1,color=c)
+			ax2.set_xlim([0.,np.max(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz)])
 
 			if pid_status.value == 1:
 				ax3_hdl.remove()
@@ -482,7 +490,7 @@ if __name__ == '__main__':
 				fig1.savefig(plots_path + savename_loop + ".png", dpi=300, transparent=True)
 
 				###SAVE TRACE DATA
-				np.array(y_trace1_V).dump(open(data_path+'\\'+savename_loop+'.npy', 'wb')) #myArray = np.load(open('array.npy', 'rb'))
+				np.array([y_trace1_V,y_trace2_V]).dump(open(data_path+'\\'+savename_loop+'.npy', 'wb')) #myArray = np.load(open('array.npy', 'rb'))
 
 				if do_piderror_plot == 1:
 					fig2.savefig(plots_path + savename+ "_piderro_TinS_ERRinPTS_ERRinMHZ.png", dpi=300, transparent=True)
