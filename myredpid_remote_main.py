@@ -171,7 +171,7 @@ if __name__ == '__main__':
 	###SCPI DATA ACQUISION
 	#best
 	decimation = int(2**6)
-	buff_len = 2**14 #2ms, maximal 2**14
+	buff_len = 2**13 #2ms, maximal 2**14
 
 #	decimation = int(2**10)
 #	buff_len = 2**10 #2ms
@@ -352,7 +352,7 @@ if __name__ == '__main__':
 		time_trace1_ms = smooth(time_trace1_ms,smooth_pts)
 		y_trace1_V = smooth(y_trace1_V,smooth_pts)
 #		y_trace1_V = tiltcorrect(y_trace1_V)
-#		y_trace1_V = y_trace1_V / np.max(y_trace1_V)
+		y_trace1_V = y_trace1_V / np.max(y_trace1_V)
 #		y_trace1_V = y_trace1_V- np.max(y_trace1_V) + 1
 
 
@@ -387,14 +387,19 @@ if __name__ == '__main__':
 #		read_user_input(newstdin)
 	
 		if pid_status.value == 0:
-			y_trace_set_V = y_trace1_V # takes the setpoint 
+#			y_trace_set_V = tiltcorrect(y_trace1_V) # takes the setpoint 
+			y_trace_set_V = y_trace1_V- np.max(y_trace1_V)# takes the setpoint 
+			y_trace_set_V = np.abs(y_trace_set_V)
 			pid_error = 0
 			pid_error_MHz = 0
 			pid_error_list_pts.append(0)
 			pid_error_list_MHz.append(0)
 
 		else: # starts locking, the PID values are calculated in per cent (between 0 and 100)
-			crosscorr_V = crosscorr(y_trace1_V,y_trace_set_V)
+#			y_trace1__corr_V = tiltcorrect(y_trace1_V)
+			y_trace1__corr_V = y_trace1_V - np.max(y_trace1_V)
+			y_trace1__corr_V = np.abs(y_trace1__corr_V)
+			crosscorr_V = crosscorr(y_trace1__corr_V,y_trace_set_V)
 			time_trace_cross = range(len(crosscorr_V))
 			time_trace_cross_ms = np.asarray(time_trace_cross) * delta_time_s_ms
 			ind_max_cross = np.argmax(crosscorr_V) # the maximum of the correlation between set_trace and actual trace gives the error
@@ -466,7 +471,7 @@ if __name__ == '__main__':
 				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='red')
 				act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len)] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='black')
 #				ax3.set_xlim([0.4*2.*sweep_span_MHz,.6*2*sweep_span_MHz])
-				ax3.set_xlim([-0.1*2.*sweep_span_MHz,.1*2*sweep_span_MHz])
+				ax3.set_xlim([-0.05*2.*sweep_span_MHz,0.05*2*sweep_span_MHz])
 			if do_piderror_plot == 1:
 				ax21_hdl.remove()
 				ax21_hdl, = ax21.plot(time_pid_error_list_s,pid_error_list_MHz,markersize=5,linewidth = 1,color='black')
