@@ -24,119 +24,9 @@ import redpitaya_scpi as scpi
 import time as tm
 from matplotlib.pyplot import cm 
 from itertools import cycle
-from redpid_lib import tiltcorrect
+from redpid_lib import tiltcorrect, autocorr, crosscorr, smooth, correct_wgmr_trace, read_user_input
 import multiprocessing
 import ctypes
-
-def autocorr(x):
-    "calculates the autocorrelation function for multiple purposes"
-#    result = np.convolve(x, x, mode='same')
-    result = np.convolve(x, np.flipud(x), mode='full')
-    return result[result.size/2.:]
-
-def crosscorr(x,y):
-    "calculates the crosscorrelation function for multiple purposes"
-#    result = np.convolve(x, x, mode='same')
-    result = np.convolve(x, np.flipud(y), mode='full')
-    return result
-
-def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid):
-    "waits for input from the console"
-    newstdinfile = os.fdopen(os.dup(newstdin))
-
-    while True:
-        stind_checkout = newstdinfile.readline()
-        stind_checkout = stind_checkout[:len(stind_checkout)-1]
-
-        if (stind_checkout == "on"):
-	        print('Start the lock')
-	        pid_status.value = 1   
-
-        if (stind_checkout == "off"):
-	        print('Stop the lock')
-	        pid_status.value = 0   
-
-        if (stind_checkout[0] == "P"):
-	        print('New P', stind_checkout[1:]) 
-	        P_pid.value = int(stind_checkout[1:])    
-
-        if (stind_checkout[0] == "I"):
-	        print('New I', stind_checkout[1:]) 
-	        I_pid.value = int(stind_checkout[1:])    
-
-        if (stind_checkout[0] == "G"):
-	        print('New gain', stind_checkout[1:]) 
-	        G_pid.value = int(stind_checkout[1:])
-
-        if (stind_checkout[0] == "O"):
-	        print('New offset', stind_checkout[1:]) 
-	        O_pid.value = int(stind_checkout[1:])
-
-        if (stind_checkout == "exit"):
-	        print('Stop the music')
-	        flag.value = 1
-	        newstdinfile.close()
-
-	        break
-        else:
-	        continue
-
-def smooth(x,window_len=11,window='hanning'):
-    """smooth the data using a window with requested size.
-    
-    http://wiki.scipy.org/Cookbook/SignalSmooth
-    
-    This method is based on the convolution of a scaled window with the signal.
-    The signal is prepared by introducing reflected copies of the signal 
-    (with the window size) in both ends so that transient parts are minimized
-    in the begining and end part of the output signal.
-    
-    input:
-        x: the input signal 
-        window_len: the dimension of the smoothing window; should be an odd integer
-        window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
-            flat window will produce a moving average smoothing.
-
-    output:
-        the smoothed signal
-        
-    example:
-
-    t=linspace(-2,2,0.1)
-    x=sin(t)+randn(len(t))*0.1
-    y=smooth(x)
-    
-    see also: 
-    
-    np.hanning, np.hamming, np.bartlett, np.blackman, np.convolve
-    scipy.signal.lfilter
- 
-    TODO: the window parameter could be the window itself if an array instead of a string
-    NOTE: length(output) != length(input), to correct this: return y[(window_len/2-1):-(window_len/2)] instead of just y.
-    """
-    if x.ndim != 1:
-        raise ValueError("smooth only accepts 1 dimension arrays.")
-
-    if x.size < window_len:
-        raise ValueError("Input vector needs to be bigger than window size.")
-
-    if window_len<3:
-        return x
-
-    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
-        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
-
-
-    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
-    #print(len(s))
-    if window == 'flat': #moving average
-        w=np.ones(window_len,'d')
-    else:
-        w=eval('np.'+window+'(window_len)')
-
-    y=np.convolve(w/w.sum(),s,mode='valid')
-    return y[(window_len/2-1):-(window_len/2)]
-
 
 ########################################################################
 ###MAIN Process
@@ -156,10 +46,11 @@ if __name__ == '__main__':
 	do_plot = 1 #only plots of =1
 	do_show_plot = 0 #shows the plot and puts the programm on hold, use to get the FP peaks
 	do_pid_output = 0 #only does pid output voltage for = 1, mainly for debugging
+	do_crosscorr = 1 #does crosscorrelation if equalt to 1, otherwise autocorrelation
 	do_print_output = 1 #show console output if 1, gets changed according to runtime
 	update_period_s = 0.1 #uodate time for console output
 	do_save = 1 # save plots, trace data and shift data
-	do_loop_saving = 1 #saves every trace of the loop! Be careful
+	do_loop_saving = 0 #saves every trace of the loop! Be careful
 	do_piderror_plot = 1 #saves every trace of the loop! Be careful
 
 	###THREADING SETTINGS
@@ -264,6 +155,7 @@ if __name__ == '__main__':
 
 	###REMOTE CONNECTION
 	rp_s = scpi.scpi("10.64.11.12")
+#	rp_s = scpi.scpi("169.254.255.216")
 	
 #	print '###START RECORDING###'
 #	print 'decimation is', decimation, 
@@ -387,22 +279,27 @@ if __name__ == '__main__':
 #		read_user_input(newstdin)
 	
 		if pid_status.value == 0:
-#			y_trace_set_V = tiltcorrect(y_trace1_V) # takes the setpoint 
-			y_trace_set_V = y_trace1_V- np.max(y_trace1_V)# takes the setpoint 
-			y_trace_set_V = np.abs(y_trace_set_V)
+#			y_trace_set_V = tiltcorrect(y_trace1_V) # takes the setpoint
+			if do_crosscorr == 1:
+				y_set = crosscorr(correct_wgmr_trace(y_trace1_V),correct_wgmr_trace(y_trace2_V))
+			else:
+				y_set = correct_wgmr_trace(y_trace1_V)
+
 			pid_error = 0
 			pid_error_MHz = 0
 			pid_error_list_pts.append(0)
 			pid_error_list_MHz.append(0)
 
 		else: # starts locking, the PID values are calculated in per cent (between 0 and 100)
-#			y_trace1__corr_V = tiltcorrect(y_trace1_V)
-			y_trace1__corr_V = y_trace1_V - np.max(y_trace1_V)
-			y_trace1__corr_V = np.abs(y_trace1__corr_V)
-			crosscorr_V = crosscorr(y_trace1__corr_V,y_trace_set_V)
-			time_trace_cross = range(len(crosscorr_V))
+			if do_crosscorr == 1:
+				y__correlation = crosscorr(correct_wgmr_trace(y_trace1_V),correct_wgmr_trace(y_trace2_V))
+				error_trace = crosscorr(y__correlation,y_set)
+			else:
+				y_trace1__corr_V = correct_wgmr_trace(y_trace1_V)
+				error_trace = crosscorr(y_trace1__corr_V,y_set)
+			time_trace_cross = range(len(error_trace))
 			time_trace_cross_ms = np.asarray(time_trace_cross) * delta_time_s_ms
-			ind_max_cross = np.argmax(crosscorr_V) # the maximum of the correlation between set_trace and actual trace gives the error
+			ind_max_cross = np.argmax(error_trace) # the maximum of the correlation between set_trace and actual trace gives the error
 			pid_error_ind = ind_max_cross -buff_len #can be negative
 			pid_error = float(1.*pid_error_ind/buff_len) # error between 0 and 1
 
@@ -467,7 +364,7 @@ if __name__ == '__main__':
 				ax3_hdl.remove()
 				set_line_hdl.remove()
 				act_line_hdl.remove()
-				ax3_hdl, = ax3.plot(time_trace_cross_ms / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,crosscorr_V,markersize=5,linewidth = 1,color=c)
+				ax3_hdl, = ax3.plot(time_trace_cross_ms / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,error_trace,markersize=5,linewidth = 1,color=c)
 				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='red')
 				act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len)] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='black')
 #				ax3.set_xlim([0.4*2.*sweep_span_MHz,.6*2*sweep_span_MHz])

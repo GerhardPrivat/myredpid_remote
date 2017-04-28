@@ -13,7 +13,117 @@ import numpy as np
 import sys, os
 from numpy import NaN, Inf, arange, isscalar, array, asarray
 import ntpath
+
+def autocorr(x):
+    "calculates the autocorrelation function for multiple purposes"
+#    result = np.convolve(x, x, mode='same')
+    result = np.convolve(x, np.flipud(x), mode='full')
+    return result[result.size/2.:]
+
+def crosscorr(x,y):
+    "calculates the crosscorrelation function for multiple purposes"
+#    result = np.convolve(x, x, mode='same')
+    result = np.convolve(x, np.flipud(y), mode='full')
+    return result
+
+def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid):
+    "waits for input from the console"
+    newstdinfile = os.fdopen(os.dup(newstdin))
+
+    while True:
+        stind_checkout = newstdinfile.readline()
+        stind_checkout = stind_checkout[:len(stind_checkout)-1]
+
+        if (stind_checkout == "on"):
+	        print('Start the lock')
+	        pid_status.value = 1   
+
+        if (stind_checkout == "off"):
+	        print('Stop the lock')
+	        pid_status.value = 0   
+
+        if (stind_checkout[0] == "P"):
+	        print('New P', stind_checkout[1:]) 
+	        P_pid.value = int(stind_checkout[1:])    
+
+        if (stind_checkout[0] == "I"):
+	        print('New I', stind_checkout[1:]) 
+	        I_pid.value = int(stind_checkout[1:])    
+
+        if (stind_checkout[0] == "G"):
+	        print('New gain', stind_checkout[1:]) 
+	        G_pid.value = int(stind_checkout[1:])
+
+        if (stind_checkout[0] == "O"):
+	        print('New offset', stind_checkout[1:]) 
+	        O_pid.value = int(stind_checkout[1:])
+
+        if (stind_checkout == "exit"):
+	        print('Stop the music')
+	        flag.value = 1
+	        newstdinfile.close()
+
+	        break
+        else:
+	        continue
+
+def smooth(x,window_len=11,window='hanning'):
+    """smooth the data using a window with requested size.
     
+    http://wiki.scipy.org/Cookbook/SignalSmooth
+    
+    This method is based on the convolution of a scaled window with the signal.
+    The signal is prepared by introducing reflected copies of the signal 
+    (with the window size) in both ends so that transient parts are minimized
+    in the begining and end part of the output signal.
+    
+    input:
+        x: the input signal 
+        window_len: the dimension of the smoothing window; should be an odd integer
+        window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
+            flat window will produce a moving average smoothing.
+
+    output:
+        the smoothed signal
+        
+    example:
+
+    t=linspace(-2,2,0.1)
+    x=sin(t)+randn(len(t))*0.1
+    y=smooth(x)
+    
+    see also: 
+    
+    np.hanning, np.hamming, np.bartlett, np.blackman, np.convolve
+    scipy.signal.lfilter
+ 
+    TODO: the window parameter could be the window itself if an array instead of a string
+    NOTE: length(output) != length(input), to correct this: return y[(window_len/2-1):-(window_len/2)] instead of just y.
+    """
+    if x.ndim != 1:
+        raise ValueError("smooth only accepts 1 dimension arrays.")
+
+    if x.size < window_len:
+        raise ValueError("Input vector needs to be bigger than window size.")
+
+    if window_len<3:
+        return x
+
+    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+
+
+    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
+    #print(len(s))
+    if window == 'flat': #moving average
+        w=np.ones(window_len,'d')
+    else:
+        w=eval('np.'+window+'(window_len)')
+
+    y=np.convolve(w/w.sum(),s,mode='valid')
+    return y[(window_len/2-1):-(window_len/2)]
+
+
 def ntest(lda,T,pol=0,MgO=0,MgO_th=5.0,E = 0): return 1.5
 
 def path_leaf(path):
@@ -38,6 +148,10 @@ def tiltcorrect(ydata,windowlen=100,degree = 1):
     for xx in x_ground:
         ytilt = np.append(ytilt,poly_horner(np.flipud(coeff),xx))
     return  ydata - ytilt 
+
+def correct_wgmr_trace(y):
+	y = y / np.max(y)
+	return 1. -y
 
 def poly_horner(A, x):
     p = A[-1]
