@@ -24,7 +24,7 @@ import redpitaya_scpi as scpi
 import time as tm
 from matplotlib.pyplot import cm 
 from itertools import cycle
-from redpid_lib import tiltcorrect, autocorr, crosscorr, smooth, correct_wgmr_trace, read_user_input
+from redpid_lib import tiltcorrect, autocorr, crosscorr, smooth, correct_wgmr_trace, read_user_input, corrected_cross
 import multiprocessing
 import ctypes
 
@@ -45,13 +45,15 @@ if __name__ == '__main__':
 	do_interactive = 0 #only do interactive plotting for =1
 	do_plot = 1 #only plots of =1
 	do_show_plot = 0 #shows the plot and puts the programm on hold, use to get the FP peaks
+	do_show_plot_raw_data = 0 # only shows the unprocessed data for =1
 	do_pid_output = 0 #only does pid output voltage for = 1, mainly for debugging
 	do_crosscorr = 1 #does crosscorrelation if equalt to 1, otherwise autocorrelation
 	do_print_output = 1 #show console output if 1, gets changed according to runtime
 	update_period_s = 0.1 #uodate time for console output
 	do_save = 1 # save plots, trace data and shift data
-	do_loop_saving = 0 #saves every trace of the loop! Be careful
+	do_loop_saving = 1 #saves every trace of the loop! Be careful
 	do_piderror_plot = 1 #saves every trace of the loop! Be careful
+	do_FP_plot = 0 # this changes the y axis of the first plot and trace 1 processing
 
 	###THREADING SETTINGS
 	datamanager = multiprocessing.Manager()
@@ -60,20 +62,24 @@ if __name__ == '__main__':
 	pid_status = multiprocessing.Value(ctypes.c_int, 0) # PID is off for 0, on for 1
 
 	###SCPI DATA ACQUISION
-	#best
-	decimation = int(2**6)
-	buff_len = 2**13 #2ms, maximal 2**14
 
+	#best for FSR measurement
+#	decimation = int(2**6)
+#	buff_len = 2**14 #2ms, maximal 2**14
+
+	#best for lock measurement
+	decimation = int(2**6)
+	buff_len = 2**12 #2ms, maximal 2**14
+	
 #	decimation = int(2**10)
 #	buff_len = 2**10 #2ms
-	num_run = 10
 	sample_rate_MHz = 125. / decimation
 	delta_time_s_ms = 1. / sample_rate_MHz * 10**(-3) 
 
 	#FREQUENCY SWEEP SETTINGS
-	t1_FP_ms = 1.55 #time of first Fabry Perot peak 
-	t2_FP_ms = 4.68 #time of second Fabry Perot peak
-	sweep_span_MHz = buff_len * delta_time_s_ms / (t2_FP_ms-t1_FP_ms) * 1000. #complete span of trace
+	t1_FP_ms = 0.501957 #time of first Fabry Perot peak 
+	t2_FP_ms = 5.5557 #time of 9th Fabry Perot peak
+	sweep_span_MHz = buff_len * delta_time_s_ms / (t2_FP_ms-t1_FP_ms) * 1000.*9. #complete span of trace
 
 	#PID SETTINGS
 	P_pid = multiprocessing.Value(ctypes.c_int, 10) #P part of pid
@@ -86,7 +92,7 @@ if __name__ == '__main__':
 	pid_output = 0 #the pid is starting from 0, but there is an pid offset of 50 percent to start in the middle
 
 	###FOLDER SETTINGS
-	savename = 'Tstabilitz_9960 degree'
+	savename = 'TM_autocorr_9581 degree'
 	pathname = os.getcwd()
 	dir_list = [x[0] for x in os.walk(pathname)]
 	for dir_name in dir_list:
@@ -112,11 +118,12 @@ if __name__ == '__main__':
 		ax1 = fig1.add_subplot(311)
 		ax2 = fig1.add_subplot(312)
 		ax3 = fig1.add_subplot(313)
-	
-		fig1.subplots_adjust(left=0.25)
-		fig1.subplots_adjust(bottom=0.25)
-		fig1.subplots_adjust(top=0.90)
-		fig1.subplots_adjust(right=0.95)
+
+		plt.tight_layout(pad=3.0, w_pad=3.0, h_pad=3.0)
+#		fig1.subplots_adjust(left=0.25)
+#		fig1.subplots_adjust(bottom=0.25)
+#		fig1.subplots_adjust(top=0.90)
+#		fig1.subplots_adjust(right=0.95)
 	
 		for axis in ['top','bottom','left','right']:
 			ax1.spines[axis].set_linewidth(1.)
@@ -127,15 +134,19 @@ if __name__ == '__main__':
 		color=cycle(cm.jet(np.linspace(0,1,100)))
 
 		ax1_hdl, = ax1.plot([],[])
+		ax1_c_hdl, = ax1.plot([],[])
 		ax2_hdl, = ax2.plot([],[])
+		ax2_c_hdl, = ax2.plot([],[])
 		ax3_hdl, = ax3.plot([],[])
 		
-		set_line_hdl = ax3.axvline(1,color='red')
-		act_line_hdl = ax3.axvline(1,color='black')
+		set_line_hdl = ax3.axvline(1.5,color='red')
+		act_line_hdl = ax3.axvline(1.5,color='black')
 
-		ax1.set_ylabel('Amplitude (V)',**axis_font)
+#		ax1.set_ylabel('Amplitude of TM modes (norm.)',**axis_font)
+		ax1.set_ylabel('Amplitude of TE modes (norm.)',**axis_font)
 		ax1.set_xlabel('Time (ms)',**axis_font)
-		ax2.set_ylabel('Amplitude (V)',**axis_font)
+		ax2.set_ylabel('Amplitude of TE modes (norm.)',**axis_font)
+		ax2.set_ylabel('Amplitude of Fabry Perot (norm.)',**axis_font)
 		ax2.set_xlabel('Frequency (MHz)',**axis_font)
 		ax3.set_ylabel('Amplitude (norm.)',**axis_font)
 		ax3.set_xlabel('Frequency (MHz)',**axis_font)
@@ -201,7 +212,7 @@ if __name__ == '__main__':
 			
 		rp_s.tx_txt('ACQ:TRIG:DLY ' + str(int(buff_len / 2.)))
 		rp_s.tx_txt('ACQ:START')
-#		tm.sleep(.05)	#pause to refresh buffer
+		tm.sleep(.1)	#pause to refresh buffer
 		rp_s.tx_txt('ACQ:TRIG EXT_PE')
 
 		while 1:
@@ -240,17 +251,16 @@ if __name__ == '__main__':
 		time_trace2_ms = np.asarray(time_trace2_ms) * delta_time_s_ms
 	
 		###PROCESS TRACES
-		smooth_pts = 10.
+		smooth_pts = 3.
 		time_trace1_ms = smooth(time_trace1_ms,smooth_pts)
 		y_trace1_V = smooth(y_trace1_V,smooth_pts)
-#		y_trace1_V = tiltcorrect(y_trace1_V)
 		y_trace1_V = y_trace1_V / np.max(y_trace1_V)
-#		y_trace1_V = y_trace1_V- np.max(y_trace1_V) + 1
+		y_trace1_c = correct_wgmr_trace(y_trace1_V)
 
-
-		time_trace2_ms = smooth(time_trace2_ms,3)
-		y_trace2_V = smooth(y_trace2_V,3)
-#		y_trace2_V = y_trace2_V- np.average(y_trace2_V)
+		time_trace2_ms = smooth(time_trace2_ms,smooth_pts)
+		y_trace2_V = smooth(y_trace2_V,smooth_pts)
+		y_trace2_V = y_trace2_V / np.max(y_trace2_V)
+		y_trace2_c = correct_wgmr_trace(y_trace2_V)
 
 		###GET TIMING
 		stop_time_s = tm.time()
@@ -281,9 +291,9 @@ if __name__ == '__main__':
 		if pid_status.value == 0:
 #			y_trace_set_V = tiltcorrect(y_trace1_V) # takes the setpoint
 			if do_crosscorr == 1:
-				y_set = crosscorr(correct_wgmr_trace(y_trace1_V),correct_wgmr_trace(y_trace2_V))
+				y_set = corrected_cross(np.abs(1.-y_trace1_c),np.abs(1.-y_trace2_c))
 			else:
-				y_set = correct_wgmr_trace(y_trace1_V)
+				y_set = np.abs(1.-y_trace1_c)
 
 			pid_error = 0
 			pid_error_MHz = 0
@@ -292,11 +302,13 @@ if __name__ == '__main__':
 
 		else: # starts locking, the PID values are calculated in per cent (between 0 and 100)
 			if do_crosscorr == 1:
-				y__correlation = crosscorr(correct_wgmr_trace(y_trace1_V),correct_wgmr_trace(y_trace2_V))
-				error_trace = crosscorr(y__correlation,y_set)
+				y_correlation = corrected_cross(np.abs(1.-y_trace1_c),np.abs(1.-y_trace2_c))
+				error_trace = crosscorr(y_correlation,y_set)
+#				error_trace = y_set
+
 			else:
-				y_trace1__corr_V = correct_wgmr_trace(y_trace1_V)
-				error_trace = crosscorr(y_trace1__corr_V,y_set)
+				error_trace = crosscorr(y_trace1_c,y_set)
+
 			time_trace_cross = range(len(error_trace))
 			time_trace_cross_ms = np.asarray(time_trace_cross) * delta_time_s_ms
 			ind_max_cross = np.argmax(error_trace) # the maximum of the correlation between set_trace and actual trace gives the error
@@ -349,16 +361,26 @@ if __name__ == '__main__':
 			plt_title = ax1.set_title('measured after ' + str(rel_start_time) + ' ms',**title_font)
 
 			c=next(color)
-#			ax1_hdl.set_xdata(time_trace1_ms)
-#			ax1_hdl.set_ydata(y_trace1_V)
-
-			ax1_hdl.remove()
-			ax1_hdl, = ax1.plot(time_trace1_ms,y_trace1_V,markersize=5,linewidth = 1,color=c)
+			c = 'black'
+			if do_show_plot_raw_data == 1:
+				ax1_hdl.remove()
+				ax1_hdl, = ax1.plot(time_trace1_ms,y_trace1_V,markersize=5,linewidth = 1,color='black')
+			ax1_c_hdl.remove()
+			ax1_c_hdl, = ax1.plot(time_trace1_ms,y_trace1_c,markersize=5,linewidth = 1,color=c)
 			ax1.set_xlim([0.,max(time_trace1_ms)])
+			ax1.set_ylim([0.80,1.02])
 
-			ax2_hdl.remove()
-			ax2_hdl, = ax2.plot(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz,y_trace2_V,markersize=5,linewidth = 1,color=c)
+			if do_show_plot_raw_data == 1:
+				ax2_hdl.remove()
+				ax2_hdl, = ax2.plot(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz,y_trace2_V,markersize=5,linewidth = 1,color='black')
+			ax2_c_hdl.remove()
+			ax2_c_hdl, = ax2.plot(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz, y_trace2_c,markersize=5,linewidth = 1,color=c)
 			ax2.set_xlim([0.,np.max(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz)])
+
+			if do_FP_plot == 1.:
+				ax2.set_ylim([0.0,1.02])
+			else:
+				ax2.set_ylim([0.80,1.02])
 
 			if pid_status.value == 1:
 				ax3_hdl.remove()
@@ -366,13 +388,22 @@ if __name__ == '__main__':
 				act_line_hdl.remove()
 				ax3_hdl, = ax3.plot(time_trace_cross_ms / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,error_trace,markersize=5,linewidth = 1,color=c)
 				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='red')
-				act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len)] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='black')
-#				ax3.set_xlim([0.4*2.*sweep_span_MHz,.6*2*sweep_span_MHz])
-				ax3.set_xlim([-0.05*2.*sweep_span_MHz,0.05*2*sweep_span_MHz])
+				if do_crosscorr==0:
+					act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len)] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='black')
+				else:
+					act_line_hdl = ax3.axvline(0.,color='black')
+				ax3.set_xlim([-200.,200.])
+
+				ax3.set_ylim([max(error_trace)-0.9*(max(error_trace)-min(error_trace)),max(error_trace)])
+#				ax3.set_xlim([-0.05*2.*sweep_span_MHz,0.05*2*sweep_span_MHz])
+
 			if do_piderror_plot == 1:
 				ax21_hdl.remove()
 				ax21_hdl, = ax21.plot(time_pid_error_list_s,pid_error_list_MHz,markersize=5,linewidth = 1,color='black')
-
+				if len(pid_error_list_MHz)>60: #don't plot extreme points
+					max_lim_MHz = 1.2*np.max(smooth(pid_error_list_MHz,20))
+					min_lim_MHz = 1.2*np.min(smooth(pid_error_list_MHz,20))
+					ax21.set_ylim(min_lim_MHz,max_lim_MHz)
 			if do_show_plot ==1:
 				plt.show()
 

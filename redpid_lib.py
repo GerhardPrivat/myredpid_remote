@@ -147,11 +147,18 @@ def tiltcorrect(ydata,windowlen=100,degree = 1):
     ytilt = np.array([], dtype='double')
     for xx in x_ground:
         ytilt = np.append(ytilt,poly_horner(np.flipud(coeff),xx))
-    return  ydata - ytilt 
+    return  ydata / ytilt 
+
+def corrected_cross(x,y):
+	cross = crosscorr(x,y)
+	cross = tiltcorrect(y,100,3)
+	return cross
 
 def correct_wgmr_trace(y):
-	y = y / np.max(y)
-	return 1. -y
+#	y = y / np.max(y)
+#	y = 1. - y
+	y = tiltcorrect(y,100,3)
+	return y
 
 def poly_horner(A, x):
     p = A[-1]
