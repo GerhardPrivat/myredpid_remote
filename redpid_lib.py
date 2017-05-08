@@ -26,7 +26,7 @@ def crosscorr(x,y):
     result = np.convolve(x, np.flipud(y), mode='full')
     return result
 
-def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid):
+def read_user_input(newstdin,flag,pid_status,show_status,P_pid,I_pid,G_pid,O_pid):
     "waits for input from the console"
     newstdinfile = os.fdopen(os.dup(newstdin))
 
@@ -42,6 +42,10 @@ def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid):
 	        print('Stop the lock')
 	        pid_status.value = 0   
 
+        if (stind_checkout == "show"):
+	        print('Show the plots and stop')
+	        show_status.value = 1   
+									
         if (stind_checkout[0] == "P"):
 	        print('New P', stind_checkout[1:]) 
 	        P_pid.value = int(stind_checkout[1:])    
@@ -130,7 +134,19 @@ def path_leaf(path):
     head, tail = ntpath.split(path)
     tail =  ('.').join(tail.split('.')[:-1])
     return tail or ntpath.basename(head)
-    
+
+def bg_correct(ydata,windowlen=100,degree = 1):
+#    import poly_iter
+    x_ground = np.arange(len(ydata))
+    x_ground_fit = smooth(x_ground,window_len=int(len(x_ground)/windowlen),window='hanning')
+    ydata_fit    = smooth(ydata   ,window_len=int(len(ydata)   /windowlen),window='hanning')
+    coeff = np.polyfit(x_ground_fit,ydata_fit, degree)
+
+    ytilt = np.array([], dtype='double')
+    for xx in x_ground:
+        ytilt = np.append(ytilt,poly_horner(np.flipud(coeff),xx))
+    return  ydata - ytilt 
+				
 def tiltcorrect(ydata,windowlen=100,degree = 1):
 #    import poly_iter
     x_ground = np.arange(len(ydata))
@@ -151,7 +167,8 @@ def tiltcorrect(ydata,windowlen=100,degree = 1):
 
 def corrected_cross(x,y):
 	cross = crosscorr(x,y)
-	cross = tiltcorrect(y,100,3)
+#	cross = crosscorr(np.abs(1.-x),np.abs(1.-y))
+	cross = bg_correct(cross,100,2)
 	return cross
 
 def correct_wgmr_trace(y):
@@ -456,44 +473,3 @@ def get_error_max(trace_1,ind_set):
     "Takes maximum of trace and calculates error max"
     ind_error_max = np.argmax(trace_1) - ind_set
     return ind_error_max
-
-def read_user_input(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid):
-    "waits for input from the console"
-    newstdinfile = os.fdopen(os.dup(newstdin))
-
-    while True:
-        stind_checkout = newstdinfile.readline()
-        stind_checkout = stind_checkout[:len(stind_checkout)-1]
-
-        if (stind_checkout == "on"):
-	        print('Start the lock')
-	        pid_status.value = 1   
-
-        if (stind_checkout == "off"):
-	        print('Stop the lock')
-	        pid_status.value = 0   
-
-        if (stind_checkout[0] == "P"):
-	        print('New P', stind_checkout[1:]) 
-	        P_pid.value = int(stind_checkout[1:])    
-
-        if (stind_checkout[0] == "I"):
-	        print('New I', stind_checkout[1:]) 
-	        I_pid.value = int(stind_checkout[1:])    
-
-        if (stind_checkout[0] == "G"):
-	        print('New gain', stind_checkout[1:]) 
-	        G_pid.value = int(stind_checkout[1:])
-
-        if (stind_checkout[0] == "O"):
-	        print('New offset', stind_checkout[1:]) 
-	        O_pid.value = int(stind_checkout[1:])
-
-        if (stind_checkout == "exit"):
-	        print('Stop the music')
-	        flag.value = 1
-	        newstdinfile.close()
-
-	        break
-        else:
-	        continue

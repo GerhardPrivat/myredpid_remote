@@ -60,6 +60,7 @@ if __name__ == '__main__':
 	datalist = datamanager.list()
 	flag = multiprocessing.Value(ctypes.c_int, 0) #the flag is used to terminate the whole program, 0 is running
 	pid_status = multiprocessing.Value(ctypes.c_int, 0) # PID is off for 0, on for 1
+	show_status = multiprocessing.Value(ctypes.c_int, 0) # PID is off for 0, on for 1
 
 	###SCPI DATA ACQUISION
 
@@ -69,7 +70,7 @@ if __name__ == '__main__':
 
 	#best for lock measurement
 	decimation = int(2**6)
-	buff_len = 2**12 #2ms, maximal 2**14
+	buff_len = 2**10 #2ms, maximal 2**14
 	
 #	decimation = int(2**10)
 #	buff_len = 2**10 #2ms
@@ -77,9 +78,10 @@ if __name__ == '__main__':
 	delta_time_s_ms = 1. / sample_rate_MHz * 10**(-3) 
 
 	#FREQUENCY SWEEP SETTINGS
-	t1_FP_ms = 0.501957 #time of first Fabry Perot peak 
-	t2_FP_ms = 5.5557 #time of 9th Fabry Perot peak
-	sweep_span_MHz = buff_len * delta_time_s_ms / (t2_FP_ms-t1_FP_ms) * 1000.*9. #complete span of trace
+	t1_FP_ms = 0.63385 #time of first Fabry Perot peak 
+	t2_FP_ms = 1.78557 #time of 9th Fabry Perot peak
+	num_FSR = 2. #number of FSRs between the two FP peaks
+	sweep_span_MHz = buff_len * delta_time_s_ms / (t2_FP_ms-t1_FP_ms) * 1000.*num_FSR #complete span of trace
 
 	#PID SETTINGS
 	P_pid = multiprocessing.Value(ctypes.c_int, 10) #P part of pid
@@ -92,7 +94,7 @@ if __name__ == '__main__':
 	pid_output = 0 #the pid is starting from 0, but there is an pid offset of 50 percent to start in the middle
 
 	###FOLDER SETTINGS
-	savename = 'TM_autocorr_9581 degree'
+	savename = 'TM_TE_autocorr_9581 degree'
 	pathname = os.getcwd()
 	dir_list = [x[0] for x in os.walk(pathname)]
 	for dir_name in dir_list:
@@ -101,15 +103,15 @@ if __name__ == '__main__':
 	data_path = plots_path[:-7] + plots_path[-1] +  'data' + plots_path[-1] 
 		
 	###PLOT SETTINGES
-	if do_plot == 1:
+	if do_plot:
 		title_font = {'fontname':'Arial', 'size':'12', 'color':'black', 'weight':'normal',
 		'verticalalignment':'bottom'} # Bottom vertical alignment for more space
 		#legend_font = {'family':'Times New Roman','size':'8'}
-		title_font = {'size':'11'}
-		axis_font = {'size':'11'}
-		ticks_font = {'size':'11'}
-		label_font = {'size':'11'}
-		legend_font = {'size':'8'}
+		title_font = {'size':'14'}
+		axis_font = {'size':'14'}
+		ticks_font = {'size':'14'}
+		label_font = {'size':'14'}
+		legend_font = {'size':'12'}
 
 		if do_interactive == 1:
 			plt.ion()
@@ -120,7 +122,7 @@ if __name__ == '__main__':
 		ax3 = fig1.add_subplot(313)
 
 		plt.tight_layout(pad=3.0, w_pad=3.0, h_pad=3.0)
-#		fig1.subplots_adjust(left=0.25)
+		fig1.subplots_adjust(left=0.15)
 #		fig1.subplots_adjust(bottom=0.25)
 #		fig1.subplots_adjust(top=0.90)
 #		fig1.subplots_adjust(right=0.95)
@@ -143,16 +145,16 @@ if __name__ == '__main__':
 		act_line_hdl = ax3.axvline(1.5,color='black')
 
 #		ax1.set_ylabel('Amplitude of TM modes (norm.)',**axis_font)
-		ax1.set_ylabel('Amplitude of TE modes (norm.)',**axis_font)
+		ax1.set_ylabel('Power of TM modes (norm.)',**axis_font)
 		ax1.set_xlabel('Time (ms)',**axis_font)
-		ax2.set_ylabel('Amplitude of TE modes (norm.)',**axis_font)
-		ax2.set_ylabel('Amplitude of Fabry Perot (norm.)',**axis_font)
+		ax2.set_ylabel('Power of TE modes (norm.)',**axis_font)
+#		ax2.set_ylabel('Amplitude of Fabry Perot (norm.)',**axis_font)
 		ax2.set_xlabel('Frequency (MHz)',**axis_font)
-		ax3.set_ylabel('Amplitude (norm.)',**axis_font)
+		ax3.set_ylabel('Correlation (norm.)',**axis_font)
 		ax3.set_xlabel('Frequency (MHz)',**axis_font)
 
 
-		if do_piderror_plot == 1:
+		if do_piderror_plot:
 			fig2 = plt.figure(2,figsize=(22.5/2.53, 8./2.53))
 			fig2.subplots_adjust(left=0.25)
 			fig2.subplots_adjust(bottom=0.25)
@@ -178,7 +180,7 @@ if __name__ == '__main__':
 	###START PID
 	###READ USER INPUT
 	newstdin = sys.stdin.fileno()
-	reading_process = multiprocessing.Process(target=read_user_input, args=(newstdin,flag,pid_status,P_pid,I_pid,G_pid,O_pid))
+	reading_process = multiprocessing.Process(target=read_user_input, args=(newstdin,flag,pid_status,show_status,P_pid,I_pid,G_pid,O_pid))
 	reading_process.start()
 
 	###START RECORDING
@@ -249,25 +251,33 @@ if __name__ == '__main__':
 		y_trace2_V = np.asarray(buff)
 		time_trace2_ms = range(len(y_trace2_V))
 		time_trace2_ms = np.asarray(time_trace2_ms) * delta_time_s_ms
-	
+
 		###PROCESS TRACES
 		smooth_pts = 3.
 		time_trace1_ms = smooth(time_trace1_ms,smooth_pts)
 		y_trace1_V = smooth(y_trace1_V,smooth_pts)
-		y_trace1_V = y_trace1_V / np.max(y_trace1_V)
-		y_trace1_c = correct_wgmr_trace(y_trace1_V)
+		if do_FP_plot:
+			y_trace1_c = y_trace1_V - np.min(y_trace1_V)
+			y_trace1_c = y_trace1_c / np.max(y_trace1_c)
+		else:
+			y_trace1_V = y_trace1_V / np.max(y_trace1_V)
+			y_trace1_c = correct_wgmr_trace(y_trace1_V)
 
 		time_trace2_ms = smooth(time_trace2_ms,smooth_pts)
 		y_trace2_V = smooth(y_trace2_V,smooth_pts)
-		y_trace2_V = y_trace2_V / np.max(y_trace2_V)
-		y_trace2_c = correct_wgmr_trace(y_trace2_V)
+		if do_FP_plot:
+			y_trace2_c = y_trace2_V - np.min(y_trace2_V)
+			y_trace2_c = y_trace2_c / np.max(y_trace2_c)
+		else:
+			y_trace2_V = y_trace2_V / np.max(y_trace2_V)
+			y_trace2_c = correct_wgmr_trace(y_trace2_V)
 
 		###GET TIMING
 		stop_time_s = tm.time()
 		rel_start_time = int(1000.*(start_time_s - ini_time_s))
 		run_time_s = int(1000.*(stop_time_s - start_time_s))
 		
-		if do_print_output == 1:
+		if do_print_output:
 			print("\n")
 			print("start time")
 			print(rel_start_time, " ms")
@@ -276,13 +286,13 @@ if __name__ == '__main__':
 
 		#SAVE DATA
 
-		if do_loop_saving == 1:
+		if do_loop_saving:
 			savename_loop = savename + '_trace' +str(ite_meas)
 #			print('savename_loop',savename_loop)
 		else:
 			savename_loop = savename
 
-		if do_print_output == 1:
+		if do_print_output:
 			print("flag, pid_status, P, I, G, O")
 			print(flag.value, pid_status.value, P_pid.value, I_pid.value, G_pid.value, O_pid.value)
 #		newstdin = sys.stdin.fileno()
@@ -290,10 +300,10 @@ if __name__ == '__main__':
 	
 		if pid_status.value == 0:
 #			y_trace_set_V = tiltcorrect(y_trace1_V) # takes the setpoint
-			if do_crosscorr == 1:
-				y_set = corrected_cross(np.abs(1.-y_trace1_c),np.abs(1.-y_trace2_c))
+			if do_crosscorr:
+				y_set = corrected_cross(np.abs(1.0-y_trace1_c),np.abs(1.0-y_trace2_c))
 			else:
-				y_set = np.abs(1.-y_trace1_c)
+				y_set = np.abs(1.0-y_trace1_c)
 
 			pid_error = 0
 			pid_error_MHz = 0
@@ -301,9 +311,9 @@ if __name__ == '__main__':
 			pid_error_list_MHz.append(0)
 
 		else: # starts locking, the PID values are calculated in per cent (between 0 and 100)
-			if do_crosscorr == 1:
-				y_correlation = corrected_cross(np.abs(1.-y_trace1_c),np.abs(1.-y_trace2_c))
-				error_trace = crosscorr(y_correlation,y_set)
+			if do_crosscorr:
+				y_correlation = corrected_cross(np.abs(1.0-y_trace1_c),np.abs(1.0-y_trace2_c))
+				error_trace = corrected_cross(y_correlation,y_set)
 #				error_trace = y_set
 
 			else:
@@ -327,14 +337,14 @@ if __name__ == '__main__':
 			pid_error_list_pts.append(pid_error*buff_len)
 			pid_error_list_MHz.append(pid_error_MHz)
 
-		if do_print_output == 1:
+		if do_print_output:
 			av_time_ms = (1000.*(stop_time_s-ini_time_s ) / ite_meas)
 			print("averaged run time of programm")
 			print(av_time_ms, ' ms')
 
 		###SET PID VOLTAGE OUTPUT
 		#rp_s.tx_txt('CR/LF'); #no idea what this one does
-		if do_pid_output == 1:
+		if do_pid_output:
 			pid_output_percent = pid_output + O_pid.value # pid_offset let's the output start in the middle (50) to have the maximal range.
 
 			if pid_output_percent < 0:
@@ -347,7 +357,7 @@ if __name__ == '__main__':
 			scpi_command = 'ANALOG:PIN AOUT' + pin_out_num + ',' + pid_output_V
 			rp_s.tx_txt(scpi_command)
 
-		if do_print_output == 1:
+		if do_print_output:
 			if do_pid_output == 0:
 				print("pid_error (pcent), pid_error (MHz), pid_offset (pcent))")
 #			print(np.round(1000.*pid_error)/1000.,np.round(1000.*pid_error_MHz)/1000.,np.round(1000.*pid_offset)/1000.,np.round(1000.*pid_output_V)/1000.)
@@ -357,11 +367,11 @@ if __name__ == '__main__':
 				print(pid_error,pid_error_MHz,O_pid.value,pid_output_V)
 
 		###PLOT TRACES
-		if do_plot == 1:
-			plt_title = ax1.set_title('measured after ' + str(rel_start_time) + ' ms',**title_font)
+		if do_plot:
+			plt_title = ax1.set_title('measurement time: ' + str(round(rel_start_time/100.)/10.) + ' s',**title_font)
 
 			c=next(color)
-			c = 'black'
+			c = [0,0.2,0.8]
 			if do_show_plot_raw_data == 1:
 				ax1_hdl.remove()
 				ax1_hdl, = ax1.plot(time_trace1_ms,y_trace1_V,markersize=5,linewidth = 1,color='black')
@@ -370,6 +380,7 @@ if __name__ == '__main__':
 			ax1.set_xlim([0.,max(time_trace1_ms)])
 			ax1.set_ylim([0.80,1.02])
 
+			c = [.8,0,0.2]
 			if do_show_plot_raw_data == 1:
 				ax2_hdl.remove()
 				ax2_hdl, = ax2.plot(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz,y_trace2_V,markersize=5,linewidth = 1,color='black')
@@ -377,48 +388,61 @@ if __name__ == '__main__':
 			ax2_c_hdl, = ax2.plot(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz, y_trace2_c,markersize=5,linewidth = 1,color=c)
 			ax2.set_xlim([0.,np.max(time_trace2_ms/max(time_trace2_ms)*sweep_span_MHz)])
 
-			if do_FP_plot == 1.:
+			if do_FP_plot:
 				ax2.set_ylim([0.0,1.02])
 			else:
 				ax2.set_ylim([0.80,1.02])
 
-			if pid_status.value == 1:
+			if pid_status.value:
 				ax3_hdl.remove()
 				set_line_hdl.remove()
 				act_line_hdl.remove()
-				ax3_hdl, = ax3.plot(time_trace_cross_ms / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,error_trace,markersize=5,linewidth = 1,color=c)
-				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='red')
+				set_line_hdl = ax3.axvline(time_trace_cross_ms[ind_max_cross] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='magenta')
 				if do_crosscorr==0:
-					act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len)] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='black')
+					act_line_hdl = ax3.axvline(time_trace_cross_ms[int(buff_len)] / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,color='grey')
 				else:
 					act_line_hdl = ax3.axvline(0.,color='black')
-				ax3.set_xlim([-200.,200.])
+				ax3_hdl, = ax3.plot(time_trace_cross_ms / max(time_trace_cross_ms)*2*sweep_span_MHz - sweep_span_MHz,error_trace,markersize=5,linewidth = 1,color='black')
+				ax3.set_xlim([-100.,100.])
 
 				ax3.set_ylim([max(error_trace)-0.9*(max(error_trace)-min(error_trace)),max(error_trace)])
 #				ax3.set_xlim([-0.05*2.*sweep_span_MHz,0.05*2*sweep_span_MHz])
 
-			if do_piderror_plot == 1:
+			if do_piderror_plot:
 				ax21_hdl.remove()
 				ax21_hdl, = ax21.plot(time_pid_error_list_s,pid_error_list_MHz,markersize=5,linewidth = 1,color='black')
 				if len(pid_error_list_MHz)>60: #don't plot extreme points
-					max_lim_MHz = 1.2*np.max(smooth(pid_error_list_MHz,20))
-					min_lim_MHz = 1.2*np.min(smooth(pid_error_list_MHz,20))
+					max_lim_MHz = 1.2*np.max(smooth(np.asarray(pid_error_list_MHz),20))
+					min_lim_MHz = 1.2*np.min(smooth(np.asarray(pid_error_list_MHz),20))
 					ax21.set_ylim(min_lim_MHz,max_lim_MHz)
-			if do_show_plot ==1:
+			if do_show_plot or show_status.value:
 				plt.show()
 
-			if do_interactive == 1:
+			if do_interactive:
 				plt.draw()
 #				tm.sleep(1.)
 
 			###SAVE PLOTS AND DATA
-			if do_save == 1 and do_print_output:
+			if do_save and do_print_output:
 				###SAVE TRACE PLOTS
-				fig1.canvas.draw()
-				xlabels = [item.get_text() for item in ax1.get_xticklabels()]
-				ax1.set_xticklabels(xlabels,**ticks_font)
-				ylabels = [item.get_text() for item in ax1.get_yticklabels()]
-				ax1.set_yticklabels(ylabels,**ticks_font)
+				if pid_status.value:
+					fig1.canvas.draw()
+	
+					xlabels = [item.get_text() for item in ax1.get_xticklabels()]
+					ax1.set_xticklabels(xlabels,**ticks_font)
+					ylabels = [item.get_text() for item in ax1.get_yticklabels()]
+					ax1.set_yticklabels(ylabels,**ticks_font)
+					
+					xlabels = [item.get_text() for item in ax2.get_xticklabels()]
+					ax2.set_xticklabels(xlabels,**ticks_font)
+					ylabels = [item.get_text() for item in ax2.get_yticklabels()]
+					ax2.set_yticklabels(ylabels,**ticks_font)
+	
+					xlabels_ax3 = [item.get_text() for item in ax3.get_xticklabels()]
+					ax3.set_xticklabels(xlabels_ax3,**ticks_font)
+					ylabels_ax3 = [item.get_text() for item in ax3.get_yticklabels()]
+					ax3.set_yticklabels(ylabels_ax3,**ticks_font)
+
 				#fig1.savefig(plots_path + '//' + savename + '.pdf', transparent=True)
 				fig1.savefig(plots_path + savename_loop + ".png", dpi=300, transparent=True)
 
