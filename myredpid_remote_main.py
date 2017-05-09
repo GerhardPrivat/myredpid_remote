@@ -70,7 +70,7 @@ if __name__ == '__main__':
 
 	#best for lock measurement
 	decimation = int(2**6)
-	buff_len = 2**10 #2ms, maximal 2**14
+	buff_len = 2**11 #2ms, maximal 2**14
 	
 #	decimation = int(2**10)
 #	buff_len = 2**10 #2ms
@@ -297,7 +297,7 @@ if __name__ == '__main__':
 			print(flag.value, pid_status.value, P_pid.value, I_pid.value, G_pid.value, O_pid.value)
 #		newstdin = sys.stdin.fileno()
 #		read_user_input(newstdin)
-	
+
 		if pid_status.value == 0:
 #			y_trace_set_V = tiltcorrect(y_trace1_V) # takes the setpoint
 			if do_crosscorr:
@@ -314,7 +314,7 @@ if __name__ == '__main__':
 			if do_crosscorr:
 				y_correlation = corrected_cross(np.abs(1.0-y_trace1_c),np.abs(1.0-y_trace2_c))
 				error_trace = corrected_cross(y_correlation,y_set)
-#				error_trace = y_set
+				error_trace = y_set
 
 			else:
 				error_trace = crosscorr(y_trace1_c,y_set)
@@ -450,7 +450,7 @@ if __name__ == '__main__':
 				np.array([y_trace1_V,y_trace2_V]).dump(open(data_path+'\\'+savename_loop+'.npy', 'wb')) #myArray = np.load(open('array.npy', 'rb'))
 
 				if do_piderror_plot == 1:
-					fig2.savefig(plots_path + savename+ "_piderro_TinS_ERRinPTS_ERRinMHZ.png", dpi=300, transparent=True)
+					fig2.savefig(plots_path + savename+ "_piderro_TinS_ERRinPTS_ERRinMHZ.png", dpi=300, transparent=False)
 
 
 	if do_plot == 1:

@@ -146,7 +146,7 @@ def bg_correct(ydata,windowlen=100,degree = 1):
     for xx in x_ground:
         ytilt = np.append(ytilt,poly_horner(np.flipud(coeff),xx))
     return  ydata - ytilt 
-				
+
 def tiltcorrect(ydata,windowlen=100,degree = 1):
 #    import poly_iter
     x_ground = np.arange(len(ydata))
@@ -165,10 +165,26 @@ def tiltcorrect(ydata,windowlen=100,degree = 1):
         ytilt = np.append(ytilt,poly_horner(np.flipud(coeff),xx))
     return  ydata / ytilt 
 
+def bg_corr_correct(ydata,windowlen=100,degree = 1):
+#    import poly_iter
+    x_ground = np.arange(len(ydata))
+    x_ground_fit = smooth(x_ground,window_len=int(len(x_ground)/windowlen),window='hanning')
+    ydata_fit    = smooth(ydata   ,window_len=int(len(ydata)   /windowlen),window='hanning')
+
+    coeff_1 = np.polyfit(x_ground_fit[0:int(len(ydata)/2.)],ydata_fit[0:int(len(ydata)/2.)], degree)
+    coeff_2 = np.polyfit(x_ground_fit[int(len(ydata)/2.)+1:len(ydata)],ydata_fit[int(len(ydata)/2.)+1:len(ydata)], degree)
+
+    ytilt = np.array([], dtype='double')
+    for xx in x_ground[0:int(len(ydata)/2.)]:
+        ytilt = np.append(ytilt,poly_horner(np.flipud(coeff_1),xx))
+    for xx in x_ground[int(len(ydata)/2.)+1:len(ydata)]:
+        ytilt = np.append(ytilt,poly_horner(np.flipud(coeff_2),xx))
+    return  ydata - ytilt 
+
 def corrected_cross(x,y):
 	cross = crosscorr(x,y)
 #	cross = crosscorr(np.abs(1.-x),np.abs(1.-y))
-	cross = bg_correct(cross,100,2)
+	cross = bg_corr_correct(cross,100)
 	return cross
 
 def correct_wgmr_trace(y):
